@@ -3,15 +3,8 @@ require   Exporter;
 @ISA    = qw(Exporter);
 @EXPORT = qw(IniCommandProxyTools CommandProxy ReadInfoDynamicLsfConf WriteFileLock ReadFileLock RunCommand QueryCeType PrintDebug $CEProductionState $CEDefaultState $schedCycle @volist %VO2LSF %LSF2VO %VO2QUEUE %QUEUE2VO $LRMSInfoFile @LastCommandOutput @LsfLocalQueues $CELSFType $CacheID $GlueFormat $ReportWhichGroup $CPUScalingReferenceSI00 $glExec $Glue1StaticFileComp $Glue2StaticFileComp $Glue2StaticFileShare $binPath $MapFile $Debug DEBUG);
 
-##############################################
-# 
-# $ID:$
-#
-# Changelog:
-# $LOG:$ 
-#
-##############################################
-
+$VERSION = '2.2.1-1';
+$ABSTRACT = "perl module to enable caching";
 use strict;
 use diagnostics;
 use Date::Parse;

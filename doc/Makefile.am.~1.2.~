@@ -1,2 +1,0 @@
-docdir = ${exec_prefix}/share/egi/doc/info.dynamic-scheduler-lsf
-doc_SCRIPTS = info-dynamic-lsf.txt btools.txt
