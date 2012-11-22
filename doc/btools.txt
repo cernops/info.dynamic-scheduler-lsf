@@ -1,0 +1,62 @@
+btools tool suite
+==================
+
+What it is:
+-----------
+It's a collection of simplyfied LSF commands, which provide machine readable output. The executables are linked against the LSF API.
+For larger LSF installations, it is recommended to use these tools. If installed at the right place, the LSF information provider
+plugins will automatically make use of them. Else they will fall back to the standart commands, and try to parse their output.
+
+Why are there no binariers ?
+---------------------------
+Binaries for these tools cannot be provided because different sites use different LSF versions, and also the individual 
+installations differ quite a lot between sites. Now sources and build tools are provided which sites can use to rebuild these
+tools if they wish to use them.
+
+Prerequisits:
+-------------
+
+You will need at least gcc and automake/autoconf:
+
+# yum install gcc autoconf automake
+
+If you can build an rpm, you will need as well rpmbuild:
+# yum install rpm-build
+
+In addition, you will need to have LSF installed, including libraries and header files. For non-standart locations you may have to update search paths accordingly.
+
+Installing and unpacking the sources:
+-------------------------------------
+As root, first install the rpm containing the sources:
+# rpm -i glite-info-dynamic-scheduler-lsf-btools-2.0.21-1.noarch.rpm
+
+Building the tools:
+-------------------
+Build the tools as normal user:
+
+tar -zxf  glite-info-dynamic-scheduler-lsf-btools-2.0.21-1.noarch.rpm
+$ cd btools
+$ ./autogen.sh
+$ ./configure --prefix=/usr
+$ make 
+
+Installing the tools:
+--------------------
+$ sudo make install
+
+If LSF is installed via rpm locally on the node, you can do 
+$ make rpm
+after the configure step, and install the resulting rpm.
+
+Testing the tools:
+-----------------
+just try 
+$ bjobsinfo 
+or 
+$ bqueuesinfo
+
+Documentation:
+--------------
+Each command comes with a man page
+
+

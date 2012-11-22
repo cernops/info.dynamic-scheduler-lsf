@@ -1,0 +1,97 @@
+Dynamic info providers for LSF Version 2.x
+==========================================
+
+This version of the LSF dynamic information providers is a complete rewrite of the previous version.
+
+Design goals:
+------------
+- support for several CEs looking at the same batch system
+- reduce number of queries to the batch system
+- improved scalability
+- code improvements
+- add documentation
+- make it more configurable
+- get ready for gLite, but be compatible with lcg
+
+
+Implementation details:
+-----------------------
+- lrms information is now created by the glite-info-dynamic-lsf executable. This allows the system to provide consistent information
+- caching of LSF results:
+ + reduce number of batch system calls by avoiding unnecessary queries
+ + allow serveral CEs to provide consistent information if the caches are shared (put on a shared file system)
+
+Addons:
+------
+- for efficiency reasons, it is recommended to use btools. See:
+  /usr/share/egi/doc/glite.info.dynamic-scheduler-lsf/btools.txt
+
+- Since version -13 the information providers add support for local time based grid queues for gLite. Grid jobs running in such queues,
+  would be reported as if running in the usually VO based queue that is reported by the CE. This feature will require an appropriate 
+  glite-local-submit-attributes.sh. It's not very well tested, better leave it switched off unless you know what you are doing.
+
+Installation:
+-------------
+- install the glite-info-dynamic-scheduler-lsf rpm
+- for gLite, also install the glite-info-dynamic-scheduler-lsf-gLite-compat 
+- optionally compile and install btools
+
+Configuration:
+--------------
+A sample configuration file can be found in 
+/etc/glite-info-dynamic-lsf.conf
+
+NOTE: The default configuration will emulate the old behaviour of the information providers. Some 
+      CERN specific customizations are included for reference, and commented out
+
+Caching:
+-------- 
+The default cache location is /var/cache/info-dynamic-lsf. 
+You can share this directory between all CEs which are looking at the same cluster nodes, for example via NFS. If you do so, make
+sure that the directory is writable for the correct account which runs the bdii on the CEs.
+
+
+Configuration Notes:
+--------------------
+Currently, no yaim module is available to manipulate the configuration file. 
+
+Attention on the value of "ReportWhichGroup:"
+
+GID: if this value is used, the group to VO mapping in lcg-info-dynamic-scheduler.conf refers to the unix group. 
+      This is the yaim default
+LSF,LSFR: if one of these settings is used, different mappings have to be used in lcg-info-dynamic-scheduler.conf
+          To get them, it needs to use the command 
+              bugroups -w (for "LSF")
+	      bugroups -w -r (for "LSFR")
+           command and parse the output to get the LSF group names
+Example: in the case of CERN, "LSF" is used, and the mappings look like:
+--------
+     vomap :
+        grid_ATLAS:atlas
+        grid_ATLASSGM:atlas
+        grid_ATLASPRD:atlas
+        grid_ATLASPLT:atlas
+        grid_ALICE:alice
+        grid_ALICESGM:alice
+        grid_ALICEPRD:alice
+             .....
+
+Files:
+------
+/etc/glite-info-dynamic-lsf.conf
+Sample configuration file. Please update according to your needs.
+
+/usr/bin/glite-info-dynamic-lsf
+The main scheduler plugin
+
+/usr/bin/glite-info-shares-lsf
+Plugin to return information about shares 
+
+/usr/bin/lrmsinfo-lsf
+Plugin to create the lrms info file 
+
+/usr/bin/vomaxjobs-lsf
+Plugin for vomaxjobs 
+
+/usr/lib/perl5/vendor_perl/EGI/CommandProxyTools.pm
+Perl module dealing with caching, timeouts and file based locking 

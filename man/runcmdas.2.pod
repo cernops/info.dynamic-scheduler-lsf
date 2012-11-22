@@ -1,0 +1,31 @@
+=head1 NAME
+
+runcmdas
+
+=head1 SYNOPSIS
+
+runcmdas <command>
+
+=head1 DESCRIPTION
+
+runcmd is a wrapper designed for running external commands with caching. The output produced by <command> will be cached for a period of time which can be configured in 
+
+/etc/lrms/lsf.conf
+
+This is specifically useful for LSF batch query commands, if the cache directory (to be defined in /etc/lrms/lsf.conf) is shared between many host. 
+The difference to runcmd is that it will attempt to run the command as ldap user, if it is started as root. The reasoning behind this is that at 
+large sites, the cache directory can be shared via NFS if it is accessed from all CEs by the same account, ldap in the case of EMI.   
+
+=head1 BUGS
+
+None known.
+
+=head1 AUTHOR
+
+Ulrich Schwickerath
+
+=head1 SEE ALSO
+lsf.conf[2] runcmd[2]
+
+=cut
+

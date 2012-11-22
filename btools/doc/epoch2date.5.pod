@@ -1,0 +1,27 @@
+=head1 NAME
+
+epoch2date
+
+=head1 SYNOPSIS
+
+epoch2date --epoch <epoch>  [--quiet] [--help]
+
+
+=head1 DESCRIPTION
+
+epoch2date returns the date that corresponds to a given epoch in a human readable form.
+The epoch represents the number of seconds passed since January 1970.
+
+=head1 BUGS
+
+None known.
+
+=head1 AUTHOR
+
+Ulrich Schwickerath <ulrich.schwickerath@cern.ch>
+
+=head1 SEE ALSO
+
+ctime(3)
+
+=cut

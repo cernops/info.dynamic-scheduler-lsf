@@ -1,0 +1,25 @@
+=head1 NAME
+
+/etc/lrms/lsf.conf
+
+=head1 SYNOPSIS
+
+none
+
+=head1 DESCRIPTION
+
+/etc/lrms/lsf.conf is the main configuration file for the LSF information provider plugins. For more information, check the comments in this file.
+
+
+=head1 BUGS
+
+None known.
+
+=head1 AUTHOR
+
+Ulrich Schwickerath
+
+=head1 SEE ALSO
+
+=cut
+

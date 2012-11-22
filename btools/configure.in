@@ -1,0 +1,21 @@
+AC_INIT(btools,1.2.2)
+AC_CONFIG_SRCDIR(src/bjobsinfo.c)
+AM_INIT_AUTOMAKE
+AM_CONFIG_HEADER(include/config.h)
+AC_PROG_CC
+CFLAGS="$CFLAGS -Wall -Werror "
+AC_STDC_HEADERS
+AC_MSG_NOTICE([Checking for LSF ...])
+AC_HAVE_HEADERS(stdio.h string.h time.h stdlib.h lsf/lsbatch.h)
+AC_CHECK_HEADERS(lsf/lsbatch.h)
+AC_CHECK_LIB(lsf,bat)
+dnl Checks for library functions.
+AC_FUNC_ALLOCA
+
+AC_CHECK_PROG(HAVE_LSID,lsid,yes,no)
+if test "x$HAVE_LSID" = "xno" ; then
+AC_ERROR([Sorry, could not find LSF.]) 
+fi
+
+AC_OUTPUT(./Makefile src/Makefile doc/Makefile )
+

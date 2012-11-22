@@ -1,0 +1,37 @@
+=head1 NAME
+
+bqueuesinfo
+
+=head1 SYNOPSIS
+
+bqueuesinfo
+
+=head1 DESCRIPTION
+
+bqueuesinfo queries the LSF subsystem to get the status of all queues
+that are defined in the current LSF instance. It returns one line 
+per job which contains the following information
+
+QueueName Priority Status maxJobs numJobs running pending ssusp ususp 
+
+In principle it is possible to retrieve the same information by parsing 
+the output of the command
+
+bqueues -a
+
+bqueuesinfo, however, returns a machine readable output, and is thought
+to be a bit faster then the above call.
+
+=head1 BUGS
+
+None known.
+
+=head1 AUTHOR
+
+Ulrich Schwickerath <ulrich.schwickerath@cern.ch>
+
+=head1 SEE ALSO
+
+bjobs(1) bjobsinfo(1)
+
+=cut

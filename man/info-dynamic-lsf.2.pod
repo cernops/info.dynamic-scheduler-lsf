@@ -1,0 +1,24 @@
+=head1 NAME
+
+info-dynamic-lsf
+
+=head1 SYNOPSIS
+
+info-dynamic-lsf [path_to_lsf_executables [config_file]]
+
+=head1 DESCRIPTION
+
+This plugin is the core dynamic LSF information provider plugin. It supports both GLUE1 and GLUE2 output formats. Batch system queries are by default cached, to reduce the load on the LSF master nodes in case a site has 2 or more CE nodes. Arguments are now optional. If given, the the first argument _must_ be the path to the LSF executables, and the second one _must_ be the configuration file name with it's full path. If not given, the LSF installation path is read from the configuration file which defaults to /etc/lrms/lsf.conf.
+
+=head1 BUGS
+
+None known.
+
+=head1 AUTHOR
+
+Ulrich Schwickerath
+
+=head1 SEE ALSO
+lsf.conf[2]
+
+=cut

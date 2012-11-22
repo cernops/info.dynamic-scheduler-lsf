@@ -1,0 +1,61 @@
+=head1 NAME
+
+bhostsinfo
+
+=head1 SYNOPSIS
+
+bhostsinfo
+
+=head1 DESCRIPTION
+
+bhostsinfo queries the LSF subsystem to get a list of all LSF server hosts
+that are defined in the current LSF instance. It returns one line 
+per host which contains the following information
+
+hostname host-type cpufactor load realLoad maxjobs numJobs numRUN numSSUSP numUSUSP attributes
+
+followed by a comma-separated list of resources which are defined for this host. The next fields 
+represent the status flags of the host. These are:
+
+HOST_STAT_OK    
+    
+HOST_STAT_FULL      
+
+HOST_STAT_BUSY      
+
+HOST_STAT_DISABLED  
+
+HOST_STAT_LOCKED    
+
+HOST_STAT_WIND      
+
+HOST_STAT_UNREACH   
+
+HOST_STAT_UNAVAIL   
+
+HOST_STAT_UNLICENSED
+
+HOST_STAT_NO_LIM    
+
+
+The command outputs information about hosts that can be retrieved otherwise by the commands
+
+lshosts
+bhosts -a
+
+bhostsinfo, however, returns a machine readable output, and is thought
+to be a bit faster then the above call.
+
+=head1 BUGS
+
+None known.
+
+=head1 AUTHOR
+
+Ulrich Schwickerath <ulrich.schwickerath@cern.ch>
+
+=head1 SEE ALSO
+
+bjobs(1) bjobsinfo(1) bqueuesinfo(1) lsb_hostinfo(3)
+
+=cut

@@ -1,0 +1,23 @@
+=head1 NAME
+
+info-shares-lsf
+
+=head1 SYNOPSIS
+
+info-shares-lsf
+
+=head1 DESCRIPTION
+
+This plugin returns information about the shares for each group, as CE capabilities. 
+
+=head1 BUGS
+
+None known.
+
+=head1 AUTHOR
+
+Ulrich Schwickerath
+
+=head1 SEE ALSO
+
+=cut

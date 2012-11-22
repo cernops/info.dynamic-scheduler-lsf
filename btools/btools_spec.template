@@ -1,0 +1,140 @@
+%define Basename btools
+Summary: replacement command(s) using the lsf SDK with machine readable output 
+Name: %{Basename}
+Version: 1.2.7
+Release: 1
+License: EGI
+Group: CERN
+Source0: %{Basename}.src.tgz
+Packager: Ulrich Schwickerath
+BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-buildroot
+
+%description
+contains the btools tool collection to query LSF efficiently from scripts
+
+%prep
+%setup -c
+
+%build
+./autogen.sh
+./configure --includedir=/usr/local/lsf/include --prefix=${RPM_BUILD_ROOT}/usr
+make
+
+%install
+[ $RPM_BUILD_ROOT != / ] && rm -rf $RPM_BUILD_ROOT
+make install
+
+%clean
+[ $RPM_BUILD_ROOT != / ] && rm -rf $RPM_BUILD_ROOT
+make clean
+
+%files
+%defattr(-,root,root,-)
+/usr/bin/bjobsinfo
+/usr/bin/bqueuesinfo
+/usr/bin/bhostsinfo
+
+%doc
+/usr/man/man1/bjobsinfo.1.gz
+/usr/man/man1/bqueuesinfo.1.gz
+/usr/man/man1/bhostsinfo.1.gz
+
+
+%changelog
+* Wed Jun 13 2012  Ulrich Schwickerath <ulrich.schwickerath at cern.ch> - 1.2.7
+- only query for a list of submission hosts instead of all hosts in the system now
+
+* Wed Jun 06 2012  Ulrich Schwickerath <ulrich.schwickerath at cern.ch> - 1.2.6-2
+- code optimizations
+
+* Wed Jun 06 2012  Ulrich Schwickerath <ulrich.schwickerath at cern.ch> - 1.2.6-1
+- add -a -h and -q option to bjobsinfo
+
+* Fri Feb 17 2012 Ulrich Schwickerath  <ulrich.schwickerath at cern.ch> - 1.2.5-1
+- add exitStatus and exitInfo
+
+* Wed Feb 08 2012 Ulrich Schwickerath  <ulrich.schwickerath at cern.ch> - 1.2.4-1
+- add worker node information to bjobsinfo 
+
+* Fri Mar 25 2011  Ulrich Schwickerath <schwicke@cern.ch> 1.2.3
+- EGI fork with reduced functionality for LSF info providers
+
+* Sat Feb 12 2011  Ulrich Schwickerath <schwicke@cern.ch> 1.2.2-2
+- bump up version number to address deployment issue
+
+* Fri Dec  3 2010  Ulrich Schwickerath <schwicke@cern.ch> 1.2.2-1
+- add support for -R option for bhostsinfo
+
+* Thu Apr  1 2010 Ricardo Silva <ricardo.silva@cern.ch> 1.2.1-2
+- support for EP6
+
+* Thu Apr 23 2009 Ulrich Schwickerath <uschwick@lxadm01.cern.ch> 1.2.1-1
+- add support for special case "type==any" in bjobsinfo 
+
+* Thu Apr 23 2009 Ulrich Schwickerath <uschwick@lxadm01.cern.ch> 1.2.0-1
+- SLC5 patches
+- support for EP5
+
+* Mon Jul 28 2008 Ulrich Schwickerath <uschwick@lxadm01.cern.ch> 1.1.2-7
+- added quiet options to date2epoch and epoch2date
+
+* Mon Mar 03 2008 Ulrich Schwickerath <uschwick@lxadm01.cern.ch> 1.1.2-6
+- rebuild for EP2
+
+* Sun Jan 27 2008 Ulrich Schwickerath <uschwick@lxadm01.cern.ch> 1.1.2-5
+- bug fix in counting of jobs which were killed while pending
+
+* Sat Jan 26 2008 Ulrich Schwickerath <uschwick@lxadm01.cern.ch> 1.1.2-4
+- more protections against crazy CPU numbers
+- protect now also utime and stime
+
+* Sat Jan 26 2008 Ulrich Schwickerath <uschwick@lxadm01.cern.ch> 1.1.2-3
+- fixed a casting bug in cpu efficiency calculation
+
+* Mon Jan 21 2008 Ulrich Schwickerath <uschwick@lxadm01.cern.ch> 1.1.2-2
+- protection against floating point exceptions in case of running=0
+
+* Mon Jan 21 2008 Ulrich Schwickerath <uschwick@lxadm01.cern.ch> 1.1.2-1
+- bug fixes
+
+* Tue Jan 15 2008 Ulrich Schwickerath <uschwick@lxadm01.cern.ch> 1.1.1-2
+- added protection against crazy CPU numbers 
+
+* Tue Jan 15 2008 Ulrich Schwickerath <uschwick@lxadm01.cern.ch> 1.1.1-1 
+- fixed memory corruption in bacctinfo when using the --user all option
+
+* Mon Aug 20 2007 Daniel Micol <dmicol@cern.ch> 1.1.0-1
+- rewrite of bacctinfo
+
+* Mon Feb 05 2007 Ulrich Schwickerath <uschwick@lxadm01.cern.ch> 1.0.0-1
+- fix for bjobsinfo in case the returned job status is not known. Map to DONE. (for lsf6.0)
+- extended bjobsinfo by a field indicating the target LSF type
+
+* Fri Dec 08 2006 Ulrich Schwickerath <uschwick@lxadm01.cern.ch> 0.0.9-1
+- added more information to bjobsinfo output
+
+* Fri Dec 08 2006 Ulrich Schwickerath <uschwick@lxadm01.cern.ch> 0.0.8-1
+- added protection against crazy real_Load values in bhostsinfo
+
+* Thu Dec 05 2006 Ulrich Schwickerath <uschwick@lxadm01.cern.ch> 0.0.7-1
+- removed debugging statement from bhostsinfo
+
+* Fri Dec 01 2006 Ulrich Schwickerath <uschwick@lxadm01.cern.ch> 0.0.6-1 
+- bug fix in hostinfo
+
+* Thu Nov 30 2006 Ulrich Schwickerath <uschwick@lxadm01.cern.ch> 0.0.5-1
+- added cpu utilisation
+
+* Thu Nov 23 2006 Ulrich Schwickerath <uschwick@lxadm01.cern.ch> 0.0.4-1
+- changed default install path from /usr/local/lsf to /usr
+- added more functionality to bhostsinfo function 
+
+* Sun Nov 12 2006 Ulrich Schwickerath <uschwick@lxadm01.cern.ch> 0.0.3-1
+- added bqueuesinfo
+- added bhostsinfo
+- added bacctinfo
+- added man pages
+- introduced rpm build tag in automake
+
+* Sat Aug 26 2006 Ulrich Schwickerath <uschwick@lxadm01.cern.ch> 0.0.2-1
+- Initial build.

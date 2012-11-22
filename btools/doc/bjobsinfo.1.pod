@@ -1,0 +1,48 @@
+=head1 NAME
+
+bjobsinfo
+
+=head1 SYNOPSIS
+
+bjobsinfo
+
+=head1 DESCRIPTION
+
+bjobsinfo queries the mbatch running on the LSF master node to get the status
+of all running and recently finished jobs for all users. It returns one line 
+per job which contains the following information
+
+jobid user state queue SubEpoch StartEpoch DoneEpoch CpuLimit RunLimit FromHost LsfState TargetLSFType
+
+
+state give the state in GRID convention, i.e. only running, queued or done, while
+LsfState gives more detailed information of the job status. The TargetLSFType is the 
+architecture of the host to which the job is to be scheduled. This is either the type as specified
+during submission time by the user, or the type of the submission host. 
+
+In principle it is possible to retrieve the same information by parsing 
+the output of the command
+
+bjobs -a -u all
+
+Depending on the number of jobs and the job throughput this can be a very
+heavy operation. The advantage of bjobsinfo is that it is much faster because
+less data is transfered, and that the output can easily be read by a script. 
+Note theat the startTime is meaningless for jobs that are pending, and that
+the endTime is meaningless for jobs that have not yet finished. 
+
+=head1 BUGS
+
+If the submission host has changed it's LSF type, bjobsinfo will report the new type for jobs that
+have been submitted before the change has taken place instead of the old one, unless the user has
+specified the target type during job submission.
+
+=head1 AUTHOR
+
+Ulrich Schwickerath <ulrich.schwickerath@cern.ch>
+
+=head1 SEE ALSO
+
+bjobs(1)
+
+=cut

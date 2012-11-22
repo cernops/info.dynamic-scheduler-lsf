@@ -1,0 +1,6 @@
+AC_INIT(src/info-dynamic-lsf)
+AM_INIT_AUTOMAKE(info-dynamic-lsf,2.1.0)
+AC_PROG_CC
+CFLAGS="$CFLAGS -Wall -Werror "
+AC_STDC_HEADERS
+AC_OUTPUT(Makefile perl/Makefile src/Makefile doc/Makefile man/Makefile)

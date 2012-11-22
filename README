@@ -1,0 +1,11 @@
+This is the lrmsinfo plugin for LSF. It will work only with 2.x 
+version of the LSF information provider plugin.
+
+YAIM configuration requirements:
+--------------------------------
+
+The name of the plugin has been changed to  lrmsinfo-lsf to be consistent
+with the corresponding name for PBS. 
+
+More details can be found in the documentation for the info-dynamic-lsf 
+package. 

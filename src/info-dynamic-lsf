@@ -1,0 +1,1502 @@
+#!/usr/bin/perl -w
+#
+# File		$Id: info-dynamic-lsf,v 1.14 2012/06/06 12:57:16 uschwick Exp $
+# basic redesign ideas:
+#    lcg-info-dynamic-lsf
+#             - merge lcg-info-dynamic-lsf and lsf_lrms_info lsf queries 
+#             - write out results for lsf_lrms_info into cache file
+#
+# Author(s): Ulrich Schwickerath <ulrich.schwickerath@cern.ch>
+#            Tim Bell <Tim.Bell@cern.ch> (original version)
+#
+
+use lib '/usr/lib/perl5/vendor_perl/EGI';
+use lib '/usr/lib/perl5/vendor_perl';
+use strict;
+use diagnostics;
+use Date::Parse;
+use File::Basename;
+use Sys::Hostname;
+use EGI::CommandProxyTools;
+use POSIX qw(strftime); 
+
+# use autoflush - important for caching
+$|=1;
+
+# global parameters
+our $Debug = 0; # debugging output to file
+
+my $ResCount = 0;
+my @HostResourceKeys;
+
+# global variables
+my $binTools = "/usr/bin";
+
+# the LRMS version
+my $BatchSystemVersion;
+
+# user and host group information 
+my %group2users; 
+my %users2groups; 
+my %hostgroups; 
+my @toplevellsfusergroups;
+
+# detailed information about the queues
+my @ExportedLSFGridQueues; # list of queues to be considered
+my @GLUE2LSFShare; # list of queues to be considered
+my %GLUE2LSFShareMappedQueue;
+my @AllGridQueues;
+
+my %queuedntext;
+my $compdntext;
+my %queuebmhosts;
+my %queuebmgroups;
+my %queuebuusers;
+my %queuebugroups;
+my %queueresreq;
+my %queuetotalslots;
+my %queuequeuedjobs;
+my %queuewaitingjobs;
+my %queuepsuspjobs;
+my %queueususpjobs;
+my %queuerunningjobs;
+my %queuessuspjobs;
+my %queuetotaljobs;
+my %queuepriority;
+my %queuemaxcputime;
+my %queuemaxwalltime;
+my %queueenabled;
+my %queuestarted;
+# statistics from bjobs 
+my %queueavpendtime; 
+my %queueavruntime;
+my %queueavwalltime;
+my %queueusedtime;
+
+# needed for proper normalization
+my  %nqueueavpendtime;
+my  %nqueueavruntime;
+my  %nqueueavwalltime;
+
+# CPU information - queue dependend due to resmyce requests
+my %hosts; # number of CPUs for each host
+my %hoststype;
+my %TotalCPUs;
+my %FreeCPU;
+my %FreeSlots;
+my %TotalSlots;
+my %TryTotalSlots;
+
+# host specific information
+my %reshosts;
+my %reshost_free;
+my %resHostSlots;
+my %resHostSlotsFree;
+my %ResTryTotalSlots;
+
+my %hoststate;
+
+# LRMS specific information
+
+my $nactive; # number of active job slots (max over all queues)
+my $nfree;   # number of free job slots   (max over all queues)
+
+# detailed information about jobs, two dimensional 
+my @lrmsjobinfo;
+
+
+# start working
+my $NowEpoch=time();# 9335-4 Now 
+    
+my $TimeDiff;
+
+
+# time zone information Bug #28296
+sub GetTimeZone(){
+# bug  #43715
+    my @LocalTime=(localtime); 
+    my @gmt=(gmtime); 
+    my $TimeDiff=$gmt[2]-$LocalTime[2]; 
+    if ($gmt[5] > $LocalTime[5] || $gmt[7] > $LocalTime[7]) 
+    { 
+	$TimeDiff += 24; 
+    } elsif ($gmt[5] < $LocalTime[5] || $gmt[7] < $LocalTime[7]) 
+    { 
+	$TimeDiff -= 24; 
+    } 
+    return $TimeDiff; 
+}
+
+sub Usage {
+    print "Usage: $0 [[<LSF bin path>] <ldif file>] \n";
+    exit 1;
+}
+
+#
+# 
+#
+sub ndays {
+    # sum days since 1.1 of year 
+    my $year = shift;
+    my $month = shift;
+    my $day = shift;
+    my  $i;
+    my  $days;
+    my @dayspmonth = (31,28,31,30,31,30,31,31,30,31,30,31);
+    
+    $dayspmonth[1] = 29 if ($year%4   == 0);
+    $dayspmonth[1] = 28 if ($year%100 ==0);
+    $dayspmonth[1] = 29 if ($year%400 ==0);
+    # sum over past months 
+    if ( $month>12 || $month<=0 ){
+	print  "Month given is not in the allowed range $month \n";
+	return -1;
+    } else {
+	if ($month<=0|| $day > $dayspmonth[$month-1] ){
+	    print "Day $day given is larger than allowed\n ";
+	    return -1;
+	} else {
+	    $days = $day;
+	    $month = $month - 1;
+	    for ($i=0;$i<$month;$i++) { $days = $days + $dayspmonth[$i]};
+	    return $days;
+	}
+    }
+}
+
+
+# PURPOSE: return the number of days between two dates
+# Arguments: two dates in integer notation,
+#            Format YYYYMMDD
+#	    
+# (C) 2000 U.Schwickerath
+# 
+#
+sub ndsdiff{
+    my $date1 = shift;
+    my $date2 = shift;
+    # number of days between two dates 
+    # both date has format yyyymmdd as integer 
+    
+    my ($i,$sum, $sum1,$sum2);
+    if ($date1 > $date2) {
+	$i = $date1;
+	$date1 = $date2;
+	$date2 = $i;
+    }
+    my ($year1,$month1,$day1) = idateymd($date1);
+    my ($year2,$month2,$day2) = idateymd($date2);
+    #print "$year1 $month1 $day1 \n";
+    #print "$year2 $month2 $day2 \n";
+    
+    if ( $year1<0 || $year2<0 ) {
+	print "Dates must be positiv. \n";
+	exit (1);
+    } else {
+	$sum  = 0;
+	$sum1 = ndays($year1,$month1,$day1);
+	$sum2 = ndays($year2,$month2,$day2);
+	for ($i=$year1;$i<$year2;$i++){ $sum = $sum + ndays($i,12,31)};
+    }
+    $sum = $sum - $sum1 + $sum2;
+    # 10 days correction 
+    $sum = $sum - 10 if ($date1<=15821004 && $date2>=15821005);
+    return $sum;
+}
+
+sub intdate {
+    # simply merges to get integer number date */
+    my $year = shift;
+    my $month = shift;
+    my $day = shift;
+    return ($day+100*$month+10000*$year);
+}
+
+sub idateymd {
+  # to convert date into year-month-day */
+    my $date = shift;
+    my $day = $date%100;
+    $date = int ($date / 100);
+    my $month = $date%100;
+    my $year = int ($date / 100);
+    return ($year,$month,$day);
+}
+
+sub yyyymmdd {
+    #convert unix style dates into integer format yyyymmdd
+    #time gets lost
+    my %month = (
+		 "jan" => "01",
+		 "feb" => "02",
+		 "mar" => "03",
+		 "apr" => "04",
+		 "may" => "05",
+		 "jun" => "06",
+		 "jul" => "07",
+		 "aug" => "08",
+		 "sep" => "09",
+		 "oct" => "10",
+		 "nov" => "11",
+		 "dec" => "12",
+		 );
+    my $mmm = shift;
+    my $Month = $month{lc($mmm)};
+    my $dd = shift;
+    my $xx = shift;
+    my $Year;
+    my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
+    if ($xx =~ /\d+\:\d+/){
+	if ($Month <= $mon){
+	    $Year = $year;
+	} else {
+	    $Year = $year -1 ;
+	}	
+    } else {
+	$Year = $xx;
+    };
+    return intdate($Year,$Month,$dd);
+}
+
+#
+# check if there is a configuration file. If so, parse it
+#
+
+sub ReadInputs {
+    if ($ARGV[0] && ! $binPath) {
+	$binPath=$ARGV[0];
+    }
+    chomp($binPath);
+
+    # first read the config file, then initialize everything
+    IniCommandProxyTools($binPath);
+
+    if ($ARGV[1] && ! $Glue1StaticFileComp) {
+	$Glue1StaticFileComp = $ARGV[1] 
+    }
+    #
+    # parse the config
+    # 
+    if ($Glue1StaticFileComp && ($GlueFormat =~ /glue1/||$GlueFormat =~ /both/)){
+	#Parse  the ldif file.
+	open (LDIF, $Glue1StaticFileComp) || die "Cannot open $Glue1StaticFileComp: $!,";
+	while (<LDIF>) {
+	    if(/dn:\s+GlueCEUniqueID=/){
+		chomp;
+		my $dntext="$_";
+		m/=.*:\d+\/\w+-\w+-([\w\-]+)/;
+		my $queue=$1;
+		push @ExportedLSFGridQueues, $queue;
+		$queuedntext{$queue}=$dntext;
+	    }
+	}
+	close (LDIF);  
+    }
+    if ($Glue2StaticFileShare  && ($GlueFormat =~ /glue2/||$GlueFormat =~ /both/)){
+	#Parse  the ldif file.
+	open (LDIF, $Glue2StaticFileShare) || die "Cannot open $Glue2StaticFileShare: $!,";
+	PrintDebug("DEBUG: Glue2: Reading $Glue2StaticFileShare");
+	while (<LDIF>) {
+	    my $queue;
+	    if(/dn:\s+GLUE2ShareID\s*=\s*/){
+		chomp;
+		my $dntext="$_";
+		while (<LDIF>){
+		    if (m/GLUE2ComputingShareMappingQueue:\s*([\w\d\-\.\_]+)/){
+			my $queue = $1;
+			chomp $queue;
+			if (0 == grep {$_ eq $dntext} @GLUE2LSFShare){
+			    $GLUE2LSFShareMappedQueue{$dntext} = $queue;
+			    push @ExportedLSFGridQueues, $queue if ( 0 == grep {$_ eq $queue} @ExportedLSFGridQueues);
+			    push @GLUE2LSFShare, $dntext 
+			}
+			last;
+		    }
+		}
+	    }
+	}
+	close (LDIF);  
+    }
+    if ($Glue2StaticFileComp  && ($GlueFormat =~ /glue2/||$GlueFormat =~ /both/)){
+	#Parse  the ldif file.
+	open (LDIF, $Glue2StaticFileComp) || die "Cannot open $Glue2StaticFileComp: $!,";
+	PrintDebug("DEBUG: Glue2: Reading $Glue2StaticFileComp");
+	while (<LDIF>) {
+	    if(/dn:\s+GLUE2ManagerId\s*=\s*/){
+		chomp;
+		$compdntext="$_\n";
+	    }
+	}
+	close (LDIF);
+    }  
+    if (! -x "$binPath/lsid") {
+	print "Cannot find lsid in directory $binPath\n";
+	Usage();
+    }
+}
+
+
+sub QueryLRMSVersion{
+    my $command = "$binPath/lsid";
+    foreach (@{RunCommand($command)}){
+        if (m/LSF\s*\D*(\d+.*\d+),/){
+	    chomp;
+	    $BatchSystemVersion=$1;
+	} elsif (m/LSF\s+\D*(\d[\d\.]*)\s+Update\s+(\d)/) {
+	    $BatchSystemVersion=$1.".0.".$2;
+	}
+    }
+}
+
+sub QueryHostGroups {
+    # resolve recursively  
+    my $command = "$binPath/bmgroup -r -w ";
+    foreach (@{RunCommand($command)}){
+	chomp;
+	my $line = $_;
+	next if ($line =~ /is\s+processing/i || $line =~ /is\s+down/i || $line =~ /not\s+responding/i);
+	next if /$line =~ GROUP_NAME/;
+	if ($line =~ m/^([\w\d\_\-\+]+)\s+(.*)/){
+	    $hostgroups{$1}=$2;
+	}
+    }
+}
+
+sub QueryUserGroupsFromSystem {
+    # read /etc/group and /etc/passwd to get the mapping 
+    my $name;
+    my $passwd;
+    my $gid;
+    my $uid;
+    my $members;
+    my $comment;
+    my $gcos;
+    my $dir;
+    my $shell;
+    my $quota;
+    my %grpname;
+    while (($name,$passwd,$gid,$members)  = getgrent()){$grpname{$gid} = $name};
+    while (($name,$passwd,$uid,$gid,$quota,$comment,$gcos,$dir,$shell) = getpwent()){$users2groups{$name}=$grpname{$gid};};
+}
+
+sub QueryUserGroupsFromLSF($) {
+    # resolve recursively 
+    my $opt = shift;
+    my $command = "$binPath/bugroup -w ".$opt;
+    foreach (@{RunCommand($command)}){
+	chomp;
+	my $line = $_;
+	next if ($line =~ /is\s+processing/i || $line =~ /is\s+down/i || $line =~ /not\s+responding/i);
+	next if ($line =~ /GROUP_NAME/);
+	if ($line =~ m/^([\w\d\_\-\+]+)\s+(.*)/){
+	    my $lsfgroup=$1;
+	    my $userlist = $2;
+	    # the first entry wins in case of LSF 
+	    if ($opt =~ /^\s*$/ && (! defined $group2users{$lsfgroup})){
+		$group2users{$lsfgroup}=$userlist; 
+		# reversemap 
+		foreach my $user (split /\s+/,$userlist){
+		    # again the first entry wins 
+		    $users2groups{$user}=$lsfgroup unless $users2groups{$user};
+		}
+	    } else { # the last entry in case of LSFR
+		$group2users{$lsfgroup}=$userlist; 
+		# reversemap 
+		my $user;
+		foreach $user (split /\s+/,$userlist){
+		    # the last entry wins 
+		    $users2groups{$user}=$lsfgroup;
+		}
+	    }
+	}
+    }
+}
+sub QueryUserGroups{
+    PrintDebug("ReportWhichGroup is set to $ReportWhichGroup\n");
+    my $opt = ($ReportWhichGroup eq "LSF") ? " ": " -r ";
+    if ($ReportWhichGroup eq "GID"){
+	PrintDebug("using system groups\n");
+	QueryUserGroupsFromSystem();
+    } elsif ($ReportWhichGroup =~ /^LSF/){
+	PrintDebug("using bugroups with $opt\n");
+	QueryUserGroupsFromLSF($opt);
+    } else {
+	die "Unknown Group model $ReportWhichGroup";
+    }
+}
+
+sub QueryHostsCPU {
+#Get a hash of WN hostnames and num of CPUs into %hosts
+    my $hostname = "";
+    foreach my $line (@{RunCommand("$binPath/lshosts -w")}){
+	next if ($line =~ /^HOST_NAME/);
+	next if ($line =~ /is\s+processing/i || $line =~ /is\s+down/i || $line =~ /not\s+responding/i);
+	my ($fullname,$type,$ncpu) = (split /\s+/,$line)[0,1,4];
+	$hostname = (split /\./, $fullname)[0];
+	next if $hostname =~ /HOST_NAME/;
+	PrintDebug("QueryHostCPU: parsing host \"$line\" with name=\"$fullname\" type=\"$type\" cpus=\"$ncpu\"\n");
+	$ncpu = 0 if ($ncpu !~ /^\d+$/);
+	$hosts{$hostname} = $ncpu;
+	$hoststype{$hostname} = $type;
+    }
+}
+
+sub QueryHostsResReq {
+    my $res_req = shift;
+    if (-e "$binTools/bhostsinfo"){
+	return (QueryHostsResReqTools($res_req));
+    } else { 
+	return (QueryHostsResReq0($res_req));
+    }
+}
+
+sub QueryHostsResReq0{
+# 
+# get all hosts that satisfy a specific res request
+#
+    my $res_req = shift;
+    my $MyMaxJobs = 0;
+    my $MyRunJobs = 0;
+    my $command = "$binPath/bhosts";
+
+    my $res_key;
+
+    # undef $res_req;
+    if ($res_req && $res_req ne "any" ){
+	$command .= " -R $res_req";	    
+    } else {
+	$res_req = "any";
+    }
+
+    # we cannot use the resource request as a hash key, hence we need to create a key
+    if ((!@HostResourceKeys) || (0 == grep {$_ eq $res_req} @HostResourceKeys)){
+	push @HostResourceKeys, $res_req;
+	$ResCount ++;
+	$res_key = "key$ResCount";
+	PrintDebug("Associated new \"$res_key\" with resource request \"$res_req\"\n");
+    } else {
+	my $i = 0;
+	foreach (@HostResourceKeys){
+	    $i++;
+	    if ($_ eq $res_req){
+		$res_key = "key$i";
+		last;
+	    }
+	}
+	PrintDebug("Return known \"$res_key\" associated with resource request \"$res_req\"\n");
+	return($res_key); # already processed before! 
+    }
+
+    foreach (@{RunCommand($command)}){
+	chomp;
+	my $line = $_;
+	next if ($line =~ /is\s+processing/i || $line =~ /is\s+down/i || $line =~ /not\s+responding/i);
+	next if (! $line =~ /(^[a-zA-Z][0-9A-Za-z_\-\.]+)\s+(\w+)/); # bug fix for 28035
+	next if ($line =~ /HOST_NAME/);	# Header	my $line = $_;
+	my $hostname;
+	my $HostStatus;		# 9335-3
+
+        # Bug fix #52369
+        unless ($line =~ /Not enough host/){
+	    ($hostname,$HostStatus,$MyMaxJobs,$MyRunJobs) = (split(/\s+/,$line))[0,1,3,4];
+	    PrintDebug("Got line: $line");
+	    PrintDebug("NAME:$hostname,STATUS:$HostStatus,MAXJOBS:$MyMaxJobs,RUNJOBS:$MyRunJobs\n");
+	    ($hostname) = (split /\./, $hostname)[0];
+	    # check if the current host has the correct LSF type. Else, skip it
+	    next if ($hostname =~ /lost_and_found/);
+	    next if (!defined $hoststype{$hostname});
+	    next if ($hoststype{$hostname} ne $CELSFType);
+	    $hoststate{$hostname} = $HostStatus;
+	    if(lc($HostStatus) eq "unavail" || lc($HostStatus) eq "unreach"){
+		$reshosts{$hostname}              = 0;
+		$reshost_free{$hostname}{$res_key} = 0;
+		$resHostSlots{$hostname}{$res_key} = 0;
+		$resHostSlotsFree{$hostname}{$res_key} = 0;
+	    } else {
+		if ($MyMaxJobs =~ /^\d+$/ && $MyMaxJobs>0) {
+		    $resHostSlots{$hostname}{$res_key}=$MyMaxJobs;
+		    $ResTryTotalSlots{$res_key}+=$MyMaxJobs;
+		    PrintDebug("Host:$hostname Key:$res_key STATUS:$HostStatus\n");
+		    if (lc($HostStatus) ne "closed") {
+			# CPUs free is cpus - jobs running.
+			$reshost_free{$hostname}{$res_key}=$hosts{$hostname}-$MyRunJobs;
+			$reshost_free{$hostname}{$res_key}=0 if ($reshost_free{$hostname}{$res_key}<0);
+			$resHostSlotsFree{$hostname}{$res_key}=$MyMaxJobs-$MyRunJobs;
+			PrintDebug ("$hostname key:$res_key Slots:$MyMaxJobs Running:$MyRunJobs CPUs:$hosts{$hostname} freecpu:$reshost_free{$hostname}{$res_key}");
+		    } else {
+			# 9335-5 If machine is busy, no free slots available
+			$reshost_free{$hostname}{$res_key}=0;
+			$resHostSlotsFree{$hostname}{$res_key}=0;
+		    }
+		}else{
+		    # 9335-3 Max Jobs = 0
+		    $reshosts{$hostname}               = 0;
+		    $reshost_free{$hostname}{$res_key} = 0;
+		    # 9349-2
+		    $resHostSlotsFree{$hostname}{$res_key} = 0;		
+		    $resHostSlots{$hostname}{$res_key} = 0;
+		}
+	    }
+	}
+    }
+    
+    # Set total slots if maximum slots / host sums less than queue limit
+    #fixme: queue limit here 
+    return ($res_key);
+}
+
+sub QueryHostsResReqTools{
+# 
+# get all hosts that satisfy a specific res request
+#
+    my $res_req = shift;
+    my $MyMaxJobs = 0;
+    my $MyRunJobs = 0;
+    my $command = "$binTools/bhostsinfo";
+
+    my $res_key;
+
+    # undef $res_req;
+    if ($res_req && $res_req ne "any" ){
+	$command .= " -R $res_req";	    
+    } else {
+	$res_req = "any";
+    }
+
+    # we cannot use the resource request as a hash key, hence we need to create a key
+    if ((!@HostResourceKeys) || (0 == grep {$_ eq $res_req} @HostResourceKeys)){
+	push @HostResourceKeys, $res_req;
+	$ResCount ++;
+	$res_key = "key$ResCount";
+	PrintDebug("Associated new \"$res_key\" with resource request \"$res_req\"\n");
+    } else {
+	my $i = 0;
+	foreach (@HostResourceKeys){
+	    $i++;
+	    if ($_ eq $res_req){
+		$res_key = "key$i";
+		last;
+	    }
+	}
+	PrintDebug("Return known \"$res_key\" associated with resource request \"$res_req\"\n");
+	return($res_key); # already processed before! 
+    }
+
+    foreach (@{RunCommand($command)}){
+	chomp;
+	my $line = $_;
+	next if ($line =~ /is\s+processing/i || $line =~ /is\s+down/i || $line =~ /not\s+responding/i);
+	my $hostname;
+	my $HostStatus;		# 9335-3
+        # Bug fix #52369
+        unless ($line =~ /Not enough host/){
+	    ($hostname,$HostStatus,$MyMaxJobs,$MyRunJobs) = (split(/\s+/,$line))[0,12,5,6];
+	    PrintDebug("Got line: $line");
+	    #PrintDebug("NAME:$hostname,STATUS:$HostStatus,MAXJOBS:$MyMaxJobs,RUNJOBS:$MyRunJobs\n");
+	    ($hostname) = (split /\./, $hostname)[0];
+	    # check if the current host has the correct LSF type. Else, skip it
+	    next if ($hostname =~ /lost_and_found/);
+	    next if (!defined $hoststype{$hostname});
+	    next if ($hoststype{$hostname} ne $CELSFType);
+	    $hoststate{$hostname} = $HostStatus;
+	    if(lc($HostStatus) eq "unavail" || lc($HostStatus) eq "unreach"){
+		$reshosts{$hostname}              = 0;
+		$reshost_free{$hostname}{$res_key} = 0;
+		$resHostSlots{$hostname}{$res_key} = 0;
+		$resHostSlotsFree{$hostname}{$res_key} = 0;
+	    } else {
+		if ($MyMaxJobs =~ /^\d+$/ && $MyMaxJobs>0) {
+		    $resHostSlots{$hostname}{$res_key}=$MyMaxJobs;
+		    $ResTryTotalSlots{$res_key}+=$MyMaxJobs;
+		    #PrintDebug("Host:$hostname Key:$res_key STATUS:$HostStatus\n");
+		    if (lc($HostStatus) ne "closed") {
+			# CPUs free is cpus - jobs running.
+			$reshost_free{$hostname}{$res_key}=$hosts{$hostname}-$MyRunJobs;
+			$reshost_free{$hostname}{$res_key}=0 if ($reshost_free{$hostname}{$res_key}<0);
+			$resHostSlotsFree{$hostname}{$res_key}=$MyMaxJobs-$MyRunJobs;
+			PrintDebug ("$hostname key:$res_key Slots:$MyMaxJobs Running:$MyRunJobs CPUs:$hosts{$hostname} freecpu:$reshost_free{$hostname}{$res_key}");
+		    } else {
+			# 9335-5 If machine is busy, no free slots available
+			$reshost_free{$hostname}{$res_key}=0;
+			$resHostSlotsFree{$hostname}{$res_key}=0;
+		    }
+		}else{
+		    # 9335-3 Max Jobs = 0
+		    $reshosts{$hostname}               = 0;
+		    $reshost_free{$hostname}{$res_key} = 0;
+		    # 9349-2
+		    $resHostSlotsFree{$hostname}{$res_key} = 0;		
+		    $resHostSlots{$hostname}{$res_key} = 0;
+		}
+	    }
+	}
+    }
+    
+    # Set total slots if maximum slots / host sums less than queue limit
+    #fixme: queue limit here 
+    return ($res_key);
+}
+
+sub QueryQueuesInfos {
+    my $command = "$binPath/bqueues -l ";
+    my $QueueName;
+    my $i;
+    my ($MaxJobs,$PrioIndex,$QueuedJobs,$RunningJobs,$PSUSPJobs,$USUSPJobs,$SSUSPJobs,$TotalJobs,$MaxCPUTime,$MaxWallTime);
+    my $input;
+    foreach $input (@{RunCommand("$command")}){
+	chomp $input;
+	next if ($input =~ /is\s+processing/i || $input =~ /is\s+down/i || $input =~ /not\s+responding/i);
+	$input =~ s/[ ]+/ /g;
+	$input =~ s/^ *//g;
+	$input =~ s/ *$//g;
+	# set the current queue name
+	if ($input =~ m/QUEUE:\s+([\w\d\_\-\+]+)/){
+	    $QueueName = $1;
+	    PrintDebug("Queue queue info for queue $QueueName"); 
+	    $queuebmgroups{$QueueName}    = " ";
+	    $queuebmhosts{$QueueName}     = " ";
+	    $queueenabled{$QueueName}     = 0;
+	    $queuestarted{$QueueName}     = 0;
+	    $queueusedtime{$QueueName}    = 0;
+	    $queuemaxwalltime{$QueueName} = 999999999;
+	    $queuemaxcputime{$QueueName}  = 999999999;
+            $queuerunningjobs{$QueueName} = 0;
+            $queuetotaljobs{$QueueName}   = 0;
+	    $nqueueavwalltime{$QueueName} = 0;
+	    $nqueueavruntime{$QueueName}  = 0;
+	    $nqueueavpendtime{$QueueName} = 0;
+            $queuepriority{$QueueName}    = 0; 
+	    next;
+	}
+	# get the group of hosts that are associated to this queue
+	my @line= split (/\s+/,$input);
+	if($input =~ m/HOSTS:/){
+	    shift @line;		# Skip HOSTS:
+	    for(@line){
+		s/\+\d+$//g;		# Remove +n for priority
+		my $field = $_;
+		PrintDebug("Analysing HOSTS entry $field"); 
+		if ($field =~ m/\/$/){            # host groups, to be resolved
+		    $field =~ s/\///g;
+		    # immediately resolve the group
+		    if (defined $hostgroups{$field}){
+			$queuebmhosts{$QueueName} .= $hostgroups{$field};
+		    } else {
+			$queuebmhosts{$QueueName} .= " $field";
+		    }
+		    PrintDebug("Resolved group $field: $queuebmhosts{$QueueName}"); 
+		    
+		} else {
+		    # not a group, so either all or a list of hosts
+		    if (/all/i){
+			foreach my $hostname (keys %hosts){$queuebmhosts{$QueueName} .= " $hostname";};
+			PrintDebug("Resolved $field field: $queuebmhosts{$QueueName}"); 
+		    } else {
+			if ($field =~ /^\~/){
+			    $field =~ s/^\~//;
+			    $queuebmhosts{$QueueName} =~ s/$field//;
+			    PrintDebug("Removed $field field: $queuebmhosts{$QueueName}"); 
+			} else {
+			    $queuebmhosts{$QueueName} .= " $field";
+			    PrintDebug("Added $field: $queuebmhosts{$QueueName}"); 
+			}
+		    }
+		}
+	    }
+	}
+	# user and user groups allowed to use this queue
+	if($input =~ m/USERS:/){
+	    shift @line;		# Skip HOSTS:
+	    for(@line){
+		s/\+\d+$//g;		# Remove +n for priority
+		if (m/\/$/){            # host groups, to be resolved
+		    s/\///g;
+		    my $backup = $_;
+		    $queuebugroups{$QueueName} .= " $backup";
+		    # create a unique list of top level lsf user groups
+		    push @toplevellsfusergroups, $backup if ((!@toplevellsfusergroups) ||(0 == grep {/$backup/} @toplevellsfusergroups));  
+		    # immediately resolve the group if possible
+		    $queuebuusers{$QueueName} .= $group2users{$_} if (defined $group2users{$_});
+		} else {
+		    $queuebuusers{$QueueName} .= " $_";
+		}
+	    }
+	}
+	# queue resource limitations
+	my $res_req;
+	if ($input =~ /RES_REQ:/) {
+	    $res_req=$input;
+	    $res_req=~ s/RES_REQ:\s*//g;		# Strip RES_REQ
+	    if ($res_req =~ /[\w\d\[\]\(\)\+\-]+/) {
+		$res_req=" \"$res_req\"";
+		$queueresreq{$QueueName} = $res_req;
+	    }
+	}
+	
+	# maximum number of jobs if any limits
+	# job statistics
+	$i=0;
+	if ($MaxJobs){
+            # 9335-2 Do not set MaxRunningJobs if -
+	    if("$line[$MaxJobs]" ne "-"){
+	        $queuetotalslots{$QueueName}=$line[$MaxJobs];
+            }
+	    undef $MaxJobs;
+	}
+
+        if (defined($PrioIndex)) {
+	    # -value since it is low for high priority
+            $queuepriority{$QueueName}=-$line[$PrioIndex];
+            undef $PrioIndex;
+        }                                                                                
+	my @tmp;
+	if ($MaxCPUTime){
+	    undef @tmp;
+	    for(@line){
+		if ( m/(\d+)\.\d+/ ){
+		    push @tmp, $1;
+		}
+	    }
+	    $queuemaxcputime{$QueueName} = $tmp[$MaxCPUTime-1];
+	    undef $MaxCPUTime;
+	}
+	if (defined($MaxWallTime)){
+	    undef @tmp;
+	    for(@line){
+		if ( m/(\d+)\.\d+/ ){
+		    push @tmp, $1;
+		}
+	    }
+	    $queuemaxwalltime{$QueueName}=$tmp[$MaxWallTime];
+	    undef $MaxWallTime;
+	}
+	
+	for (@line){
+	  SWITCH:{ 
+	      (m/^MAX$/)      && do { $MaxJobs     = $i; };
+              (m/^PRIO$/)     && do { $PrioIndex   = $i; };
+	      (m/^PEND$/)     && do { $QueuedJobs  = $i; };
+	      (m/^RUN$/)      && do { $RunningJobs = $i; };
+	      (m/^PSUSP$/)    && do { $PSUSPJobs   = $i; };
+	      (m/^USUSP$/)    && do { $USUSPJobs   = $i; };
+	      (m/^SSUSP$/)    && do { $SSUSPJobs   = $i; };
+	      (m/^NJOBS$/)    && do { $TotalJobs   = $i; };
+	      (m/^CPULIMIT$/) && do { $MaxCPUTime  = $i+1; };
+	      (m/^RUNLIMIT$/) && do { $MaxWallTime = $i; };
+	  }
+	    $i=$i+1;
+	}
+	
+	for (@line){
+	    if(m/Open:Active/){
+		$queueenabled{$QueueName}=1;
+		$queuestarted{$QueueName}=1;
+	    }
+	    if(m/Open:Inact/){
+		$queueenabled{$QueueName}=1;
+		$queuestarted{$QueueName}=0;
+	    }
+	    if(m/Closed:Active/){
+		$queueenabled{$QueueName}=0;
+		$queuestarted{$QueueName}=1;
+	    }
+	}
+    }
+}
+
+sub AnaJobInfo($$$){
+    my $jobinfo = shift;
+    my $mon     = shift; # current month 
+    my $year    = shift; # current year 
+    my $walltime;
+    my $pendtime;
+    my $runtime;
+    my $SubEpoch;
+    my $StartEpoch;
+    my $DoneEpoch;
+    my $RunLimit;
+
+    $TimeDiff=GetTimeZone() if (! defined $TimeDiff);
+    # restore truncated fields
+    $jobinfo =~ s/\<([\d\w\_\+\-\/\$\.\,\;\"\'\[\]]+)\s+([\d\w\_\+\-\/\$\.\,\;\"\'\[\]]+)\>/$1$2/g;
+    $jobinfo =~ s/([\d\w\_\+\-\/\$\.\,\;\"\'\[\]]+)\s+(\,[\d\w\_\+\-\/\$\.\;\"\'\[\]]+)\>/$1$2/g;
+    $jobinfo =~ s/\s+/ /g;
+    PrintDebug("Analysing new job record\n");
+    # process job info 
+    my $queue  = $1 if $jobinfo =~ /Q\s*u\s*e\s*u\s*e\s+\<*\s*([\w\d\_\-\+\s]+)\s*\>*/;
+    my $jobid  = $1 if $jobinfo =~ /J\s*o\s*b\s+\<*([\d\s\[\]]+)\>*/;
+    my $user   = $1 if $jobinfo =~ /U\s*s\s*e\s*r\s+\<*([\w\d\s]+)\>*/;
+    my $status = $1 if $jobinfo =~ /S\s*t\s*a\s*t\s*u\s*s\s+\<*([\w\s]+)\>*/;
+    my $from   = $1 if $jobinfo =~ /S\s*u\s*b\s*m\s*i\s*t\s*t\s*e\s*d\s*f\s*r\s*o\s*m\s*h\s*o\s*s\s*t\s*\<*([\w\d\s]+)\>*/; 
+    # match and convert time stamps
+    undef my $epoch;
+    if ($jobinfo =~ /\w\w\w\s(\w\w\w)\s(\d+)\s(\d+):(\d+):(\d+):\s+\Submitted/){
+	my $month = lc($1);
+	my $day   = $2;
+	my $hour  = $3 + $TimeDiff;#fixme
+	my $min   = $4;
+	my $sec   = $5;
+	# correction at new year
+	$year -- if ((($month =~ /nov/)||($month =~ /dec/)) && (lc($mon) =~ /Jan/ || lc($mon) =~ /Feb/));
+	my $queuetime =  yyyymmdd($month,$day,$year+1900);
+	$epoch = 3600*24*ndsdiff($queuetime,"19700101")+3600*$hour+60*$min+$sec;
+    }
+    $SubEpoch   = $epoch if ((defined $epoch) && $jobinfo =~ /:\s+Submitted\s+from/);
+    $StartEpoch = $epoch if ((defined $epoch) && $jobinfo =~ /:\s+Started\s+on/);
+    #if ($jobinfo =~ /\w\w\w\s(\w\w\w)\s(\d+)\s(\d+):(\d+):(\d+):\s+\Submitted/){
+    #	my $month = lc($1);
+    #	my $day   = $2;
+    #	my $hour  = $3 + $TimeDiff;#fixme
+    #	my $min   = $4;
+    #	my $sec   = $5;
+    #	# correction at new year
+    #	$year -- if ((($month =~ /nov/)||($month =~ /dec/)) && (lc($mon) =~ /Jan/ || lc($mon) =~ /Feb/));
+    #	my $queuetime =  yyyymmdd($month,$day,$year+1900);
+    #	$SubEpoch = 3600*24*ndsdiff($queuetime,"19700101")+3600*$hour+60*$min+$sec;
+    #}
+    $jobid  =~ s/\s+//g;
+    $user   =~ s/\s+//g;
+    $status =~ s/\s+//g;
+    $queue  =~ s/\s+//g;
+    $from = $1 if ($from =~ /^([\w\d\_]+)\./);
+    my $fromType = $hoststype{$from};
+    if ( (! $jobid) || (!$user) || (!$status) || (!$queue)|| ($jobid =~ /^\s+$/)){
+	PrintDebug("ERROR: ID:$jobid USER:$user STATUS:$status QUEUE:$queue\n");
+        PrintDebug("$jobinfo");
+	die;
+    }
+    #
+    # LRMS VO view of all jobs in all queues
+    # 
+    if ($users2groups{$user}){
+	my $lsfgroup = $users2groups{$user};
+
+	# do the state mapping
+	my $state;
+	if ($status eq  "RUN" ||$status eq   "SSUSP"||$status eq "USUSP"||$status eq "UNKWN"){
+	    $state="running";
+	} elsif ($status eq "PEND"||$status eq "PSUSP"){
+	    $state="queued";
+	} elsif ($status eq "DONE"||$status eq "EXIT"){
+	    $state="done";
+	}
+	# detailed and user specific data for LRMS
+	my $maxwalltime = (defined $RunLimit) ? $RunLimit : $queuemaxwalltime{$queue};
+        $ maxwalltime = $RunLimit if (defined $RunLimit); # user defined
+        my $expqueue = $queue;
+	my $voname;
+	# map unexported internal queues to the exported VO based queues
+	if ((0<grep {$queue eq $_} @LsfLocalQueues) && ($voname = $LSF2VO{$lsfgroup}) && $VO2QUEUE{$voname}){
+	    $expqueue = $VO2QUEUE{$voname};
+	}
+        
+	# suppress all local jobs when reporting to LRMS
+	if ((0<grep {$expqueue eq $_} @ExportedLSFGridQueues)){ 
+	    # directly create the lrms info per job here to save memory   
+	    my $jobinfo=
+		"'group': '$lsfgroup'"
+		.",'jobid': '$jobid'"
+		.",'user': '$user'"
+		.",'qtime': ${SubEpoch}.0"
+		.",'queue': '$expqueue'"
+		.",'state':'$state'";
+	    $jobinfo .= ",'start': ${StartEpoch}.0"        if ($StartEpoch);
+	    $jobinfo .= ",'maxwalltime': ${maxwalltime}.0" if ($maxwalltime);
+	    push @lrmsjobinfo, $jobinfo unless (lc($status) eq "done");
+	}
+    }
+
+    # if the job has been submitted from a host with the same type as us we report it
+    $queuequeuedjobs{$queue}  = 0  if (!defined $queuequeuedjobs{$queue});
+    $queuewaitingjobs{$queue} = 0  if (!defined $queuewaitingjobs{$queue});
+    $queuepsuspjobs{$queue}   = 0  if (!defined $queuepsuspjobs{$queue});
+    $queuessuspjobs{$queue}   = 0  if (!defined $queuessuspjobs{$queue});
+    $queueususpjobs{$queue}   = 0  if (!defined $queueususpjobs{$queue});
+    $queuerunningjobs{$queue} = 0  if (!defined $queuerunningjobs{$queue});
+    $queuetotaljobs{$queue}   = 0  if (!defined $queuetotaljobs{$queue});
+    # skip jobs for which the submission host has been retired ...
+    if ($fromType && ($fromType eq $CELSFType)) {
+	# done jobs are not counted here
+	if ($status eq "PEND"||$status eq "WAIT"||$status eq "PSUSP"||$status eq "SSUSP"||$status eq "USUSP"||$status eq "RUN"||$status eq "UNKWN"){
+	    $queuetotaljobs{$queue}   ++;
+	    $queuequeuedjobs{$queue}  ++ if ($status eq "PEND");
+	    $queuewaitingjobs{$queue} ++ if ($status eq "WAIT");
+	    $queuepsuspjobs{$queue}   ++ if ($status eq "PSUSP");
+	    $queuessuspjobs{$queue}   ++ if ($status eq "SSUSP");
+	    $queueususpjobs{$queue}   ++ if ($status eq "USUSP");
+	    $queuerunningjobs{$queue} ++ if ($status eq "RUN"||$status eq "UNKWN");
+	} else {
+	    return;
+	}
+    }
+    
+    # resources 
+    $RunLimit  = $1 if $jobinfo =~ /RUNLIMIT\s+([\d\.]+)\s+/;
+
+    # 9335-4 Find the start and calculate wall clock time since started
+    if ($jobinfo =~ m/(\w+)\s+(\w+)\s+(\d+)\s+(\d+):(\d+):(\d+):\s+(\w+)/) {
+	my $tag = $7;
+	my $ds = "$2 $3 $4:$5:$6";
+	my $epoch = str2time("$ds");
+	if ($tag eq "Submitted"){
+	    # Handle the Running Time Calculations
+	    $SubEpoch = $epoch;
+	    $pendtime=($NowEpoch-$SubEpoch)/60;
+	} elsif ($tag eq "Started"){
+	    $StartEpoch = $epoch;
+	    $runtime=($NowEpoch-$StartEpoch)/60;
+	} elsif ($tag eq "Done") {
+	    # count only successful jobs to estimate the walltime 
+	    # failed jobs end prematurely. If there is a system error we do not want to attract more jobs because of an artificially low walltime
+	    $DoneEpoch = $epoch;
+	    $walltime=($NowEpoch-$DoneEpoch)/60;
+	}
+    }
+    
+    # get queue statistics from _all_ jobs in this queue if it's a grid queue
+    if ( (0 < grep {$_ eq $queue} @ExportedLSFGridQueues)||(0 < grep {$_ eq $queue}  @LsfLocalQueues)){
+	if ($pendtime && $runtime){
+	    if ($queueavpendtime{$queue}) {
+		$queueavpendtime{$queue}  += $pendtime;
+		$nqueueavpendtime{$queue} += 1;
+	    } else {
+		$queueavpendtime{$queue}  = $pendtime;
+		$nqueueavpendtime{$queue} = 1;
+	    }	    
+	}
+	
+	if ($runtime){
+	    if ($queueavruntime{$queue}) {
+		$queueavruntime{$queue}  += $runtime;
+		$queueusedtime{$queue}   += $runtime;
+		$nqueueavruntime{$queue} += 1;
+	    } else {
+		$queueavruntime{$queue}  = $runtime;
+		$queueusedtime{$queue}   = $runtime;
+		$nqueueavruntime{$queue} = 1;
+	    }
+	}
+	
+	if ($walltime){
+	    if ($queueavwalltime{$queue}) {
+		$queueavwalltime{$queue}  += $walltime;
+		$nqueueavwalltime{$queue} += 1;
+	    } else {
+		$queueavwalltime{$queue}  = $walltime;
+		$nqueueavwalltime{$queue} = 1;
+	    }
+	}
+	
+	if ($users2groups{$user}){
+	    
+	    my $lsfgroup = $users2groups{$user};
+	    my $expqueue = $queue;
+	    my $voname;
+	    # map unexported internal queues to the exported VO based queues
+	    if ((0<grep {$queue eq $_} @LsfLocalQueues) && ($voname = $LSF2VO{$lsfgroup}) && $VO2QUEUE{$voname}){
+		$expqueue = $VO2QUEUE{$voname};
+	    }
+	}
+    }
+    
+    return;
+}
+
+
+sub QueryQueueJobSlots(){
+    # 
+    # count the number of CPUs in a queue
+    #
+    $nactive = 9999999;
+    $nfree  = 9999999;
+    foreach my $queue (@AllGridQueues){
+	$TotalCPUs{$queue}     = 0;
+	$FreeCPU{$queue}       = 0;
+	$FreeSlots{$queue}     = 0;
+	$TotalSlots{$queue}    = 0;
+	$TryTotalSlots{$queue} = 0;
+	$queuequeuedjobs{$queue}  = 0  if (!defined $queuequeuedjobs{$queue});
+	$queuewaitingjobs{$queue} = 0  if (!defined $queuewaitingjobs{$queue});
+	$queuepsuspjobs{$queue}   = 0  if (!defined $queuepsuspjobs{$queue});
+	$queuessuspjobs{$queue}   = 0  if (!defined $queuessuspjobs{$queue});
+	$queueususpjobs{$queue}   = 0  if (!defined $queueususpjobs{$queue});
+	$queuerunningjobs{$queue} = 0  if (!defined $queuerunningjobs{$queue});
+	$queuetotaljobs{$queue}   = 0  if (!defined $queuetotaljobs{$queue});
+	PrintDebug("Counting free job slots for $queue");
+	# get full list of hosts that fulfill the queue's resource requirements
+	my $resource = (defined $queueresreq{$queue}) ? $queueresreq{$queue} : "any";
+	my $res_key  = QueryHostsResReq($resource);
+	if ($queuebmhosts{$queue}){
+	    foreach (split /\s+/,$queuebmhosts{$queue}){
+		next if /^\s*$/;
+		my ($hostname) = (split /\./, $_)[0];
+		chomp $hostname;
+		# skip hosts with the wrong LSF type, the idea is to tell the truth here 
+		if (!defined $hoststype{$hostname} || $hoststype{$hostname} ne $CELSFType){
+		    if (!defined  $hoststype{$hostname} ){
+			PrintDebug("DEBUG: QueryQueueJobSlots: Skipping  $hostname because hoststype is not defined ");
+		    } else {
+			PrintDebug("DEBUG: QueryQueueJobSlots: Skipping  $hostname because type $hoststype{$hostname} ne $CELSFType");
+		    }
+		    next;
+		}
+		if (defined $reshost_free{$hostname}{$res_key}){
+		    PrintDebug("DEBUG: QueryQueueJobSlots: $reshost_free{$hostname}{$res_key}");
+		} else {
+		    PrintDebug("DEBUG: QueryQueueJobSlots: reshost_free undefined for host $hostname key $res_key");
+		}
+		if(defined $hosts{$hostname}){
+		    $TotalCPUs{$queue}+=$hosts{$hostname};
+		    PrintDebug("DEBUG: QueryQueueJobSlots:TotalCPU $hostname $queue tot:$TotalCPUs{$queue}");
+		}
+		if(defined $reshost_free{$hostname}{$res_key}){
+		    $FreeCPU{$queue}+=$reshost_free{$hostname}{$res_key};
+		    PrintDebug("DEBUG: QueryQueueJobSlots:FreeCPU $hostname $queue $reshost_free{$hostname}{$res_key} tot:$FreeCPU{$queue}");
+		}
+		if (defined $resHostSlotsFree{$hostname}{$res_key}) {
+		    $FreeSlots{$queue}+=$resHostSlotsFree{$hostname}{$res_key};
+		    PrintDebug("DEBUG: QueryQueueJobSlots:FreeSLOT $hostname $queue $resHostSlotsFree{$hostname}{$res_key} tot:$FreeSlots{$queue}");
+		}
+		if (defined $resHostSlots{$hostname}{$res_key}) {
+		    $TotalSlots{$queue}+=$resHostSlots{$hostname}{$res_key};
+		}
+	    }
+	} else {
+	    PrintDebug("ERROR: No host information for queue $queue\n");
+	}
+	# 9335-6 If queue is closed, no free slots
+	if (!$queuestarted{$queue}) {
+	    $FreeCPU{$queue}    = 0;
+	    $FreeSlots{$queue}  = 0;
+	    $TotalSlots{$queue} = 0;
+	}
+	$FreeCPU{$queue} =~ s/\..*//;
+	# 23586 FIXME
+        # ignore queue limits here. We report on the smallest host partition we can find
+	if ($TotalSlots{$queue}<$nactive){
+	    $nfree    = $FreeSlots{$queue};
+	    $nactive  = $TotalSlots{$queue};
+	}
+	PrintDebug("Queue $queue $FreeCPU{$queue} $FreeSlots{$queue}");
+    }
+}
+
+sub QueryJobsInfos(){
+    # make sure all values are defined and reset
+    my $queue;
+    my $gqueue;
+    foreach $gqueue (@AllGridQueues){
+	my $command = "$binTools/bjobsinfo";
+	if (-e $command){
+	    my $binforef = RunCommand("$command  -a -q $gqueue");
+	    foreach my $jobinfo (@{$binforef}){
+		chomp $jobinfo;
+		last if ($jobinfo =~ /lsb_openjobinfo/); # no jobs found
+		if ($jobinfo =~ /[\d\[\]]+\s+[\w\d]+\s+/){ # skip lines indicating LSF issues
+		    # format is JobID User state queue submit start end
+		    my ($jobid,$user,$status,$queue,$SubEpoch,$StartEpoch,$DoneEpoch,$CpuLimit,$RunLimit,$fromHost,$lsfstate,$exitStatus,$exitInfo,@wn) = split /\s+/,$jobinfo;
+		    my $pendtime = ($NowEpoch-$SubEpoch)/60;
+		    my $runtime  = ($NowEpoch-$StartEpoch)/60 if ($StartEpoch > 0);
+		    my $walltime = ($NowEpoch-$DoneEpoch)/60 if ($DoneEpoch > 0);
+		    # get the submission host LSF type
+		    $queuequeuedjobs{$queue}  = 0  if (!defined $queuequeuedjobs{$queue});
+		    $queuewaitingjobs{$queue} = 0  if (!defined $queuewaitingjobs{$queue});
+		    $queuepsuspjobs{$queue}   = 0  if (!defined $queuepsuspjobs{$queue});
+		    $queuessuspjobs{$queue}   = 0  if (!defined $queuessuspjobs{$queue});
+		    $queueususpjobs{$queue}   = 0  if (!defined $queueususpjobs{$queue});
+		    $queuerunningjobs{$queue} = 0  if (!defined $queuerunningjobs{$queue});
+		    $queuetotaljobs{$queue}   = 0  if (!defined $queuetotaljobs{$queue});
+		    
+		    if (defined $fromHost){
+			$fromHost = $1 if ($fromHost =~ /^([\w\d\_]+)\./);
+			my $fromType = $hoststype{$fromHost};
+			# in rare cases where the submission host no longer exists we skip this job ...
+			# if the job has been submitted from a host with the same type as us we report it
+			if ($fromType && ($fromType eq $CELSFType)) {
+			    # done jobs are not counted here
+			    if ($lsfstate eq "PEND"||$lsfstate eq "WAIT"||$lsfstate eq "PSUSP"||$lsfstate eq "SSUSP"||$lsfstate eq "USUSP"||$lsfstate eq "RUN"||$lsfstate eq "UNKWN"){
+				$queuetotaljobs{$queue}   ++ ;
+				$queuequeuedjobs{$queue}  ++ if ($lsfstate eq "PEND");
+				$queuewaitingjobs{$queue} ++ if ($lsfstate eq "WAIT");
+				$queuepsuspjobs{$queue}   ++ if ($lsfstate eq "PSUSP");
+				$queuessuspjobs{$queue}   ++ if ($lsfstate eq "SSUSP");
+				$queueususpjobs{$queue}   ++ if ($lsfstate eq "USUSP");
+				$queuerunningjobs{$queue} ++ if ($lsfstate eq "RUN"||$lsfstate eq "UNKWN");
+			    }
+			    
+			} else {
+			    next; # skip, different LSF type
+			}
+		    }
+		    
+		    #
+		    # LRMS VO view of all jobs in all queues
+		    # 
+		    if ($users2groups{$user}){
+			my $lsfgroup = $users2groups{$user};
+			
+			# detailed and user specific data for LRMS
+			my $maxwalltime = ($RunLimit>0) ? $RunLimit : $queuemaxwalltime{$queue};
+			my $maxcputime = ($CpuLimit>0)  ? $CpuLimit : $queuemaxcputime{$queue};
+			
+			my $expqueue = $queue;
+			my $voname;
+			# map unexported internal queues to the exported VO based queues
+			if ((0<grep {$queue eq $_} @LsfLocalQueues) && ($voname = $LSF2VO{$lsfgroup}) && $VO2QUEUE{$voname}){
+			    PrintDebug("Changing queue name from $queue to $expqueue for VO $voname @LsfLocalQueues");
+			    $expqueue = $VO2QUEUE{$voname};
+			}
+			# suppress all local jobs when reporting to LRMS
+			if ((0<grep {$expqueue eq $_} @ExportedLSFGridQueues)){ 
+			    # directly create the lrms info per job here to save memory
+			    my $jobinfo=
+				"'group': '$lsfgroup'"
+				.",'jobid': '$jobid'"
+				.",'user': '$user'"
+				.",'qtime': ${SubEpoch}.0"
+				.",'queue': '$expqueue'"
+				.",'state': '$status'";
+			    $jobinfo .= ",'start': ${StartEpoch}.0"        if ($StartEpoch);
+			    $jobinfo .= ",'maxwalltime': ${maxwalltime}.0" if ($maxwalltime);
+			    push @lrmsjobinfo, $jobinfo unless (lc($status) eq "done");
+			}
+		    }
+		    
+		    # get queue statistics from _all_ jobs in this queue if it's a grid queue
+		    if ( (0 < grep {$_ eq $queue} @ExportedLSFGridQueues)||(0 < grep {$_ eq $queue}  @LsfLocalQueues)){
+			if ($pendtime && $runtime){
+			    if ($queueavpendtime{$queue}) {
+				$queueavpendtime{$queue}  += $pendtime;
+				$nqueueavpendtime{$queue} += 1;
+			    } else {
+				$queueavpendtime{$queue}  = $pendtime;
+				$nqueueavpendtime{$queue} = 1;
+			    }	    
+			}
+			
+			if ($runtime){
+			    if ($queueavruntime{$queue}) {
+				$queueavruntime{$queue}  += $runtime;
+				$queueusedtime{$queue}   += $runtime;
+				$nqueueavruntime{$queue} += 1;
+			    } else {
+				$queueavruntime{$queue}  = $runtime;
+				$queueusedtime{$queue}   = $runtime;
+				$nqueueavruntime{$queue} = 1;
+			    }
+			}
+			if ($walltime){
+			    if ($queueavwalltime{$queue}) {
+				$queueavwalltime{$queue}  += $walltime;
+				$nqueueavwalltime{$queue} += 1;
+			    } else {
+				$queueavwalltime{$queue}  = $walltime;
+				$nqueueavwalltime{$queue} = 1;
+			    }
+			}
+			
+			if ($users2groups{$user}){
+			    
+			    my $lsfgroup = $users2groups{$user};
+			    my $expqueue = $queue;
+			    my $voname;
+			    # map unexported internal queues to the exported VO based queues
+			    if ((0<grep {$queue eq $_} @LsfLocalQueues) && ($voname = $LSF2VO{$lsfgroup}) && $VO2QUEUE{$voname}){
+				$expqueue = $VO2QUEUE{$voname};
+			    }
+			}
+		    }
+		}
+	    }
+	} else {
+	    my ($sec,$min,$hour,$mday,$mon,$year,$wday,$yday,$isdst) = localtime(time);
+	    #$command = "$binPath/bjobs -a -l -u all"; # need the history for lrms info
+	    $command = "$binPath/bjobs -l -u all -q $gqueue "; # don't use DONE jobs for efficiency 
+	    my $jobinfo = "";
+	    my $bjobsref = RunCommand("$command");
+	    my $nojob;
+	    PrintDebug("Received command output in $bjobsref");
+	    foreach my $section (@{$bjobsref}){
+		next if ($section =~ /is\s+processing/i || $section =~ /is\s+down/i || $section =~ /not\s+responding/i);
+		
+		# get complete output for one job into one line and correct truncated fields
+		PrintDebug(">: $section");
+		chomp $section;
+		
+		if ($section =~ /No\s+[unfinished]*\s*job\s+found/i){
+		    undef $jobinfo;
+		    foreach  $queue (@ExportedLSFGridQueues){
+			$nqueueavpendtime{$queue} = $nqueueavruntime{$queue} = $nqueueavwalltime{$queue} = 1;
+			$queueavpendtime{$queue} = $queueavruntime{$queue}  = $queueavwalltime{$queue}   = 0;
+		    }
+		    foreach  $queue (@LsfLocalQueues){
+			$nqueueavpendtime{$queue} = $nqueueavruntime{$queue} = $nqueueavwalltime{$queue} = 1;
+			$queueavpendtime{$queue} = $queueavruntime{$queue}  = $queueavwalltime{$queue}   = 0;
+		    }
+		    last;
+		};
+		if ($section =~ /^------/){
+		    AnaJobInfo($jobinfo,$mon,$year);
+		    $jobinfo = ""; # next job
+		} else {
+		    $jobinfo .= $section;  
+		}
+	    };
+	    AnaJobInfo($jobinfo,$mon,$year) if ($jobinfo); # last record !
+	    undef $jobinfo; # next job
+	    # normalize averages
+	    foreach  $queue (@ExportedLSFGridQueues){
+		$queueavpendtime{$queue} = ($nqueueavpendtime{$queue} > 0 ) ?  $queueavpendtime{$queue} / $nqueueavpendtime{$queue} : 99999999;
+		$queueavruntime{$queue}  = ($nqueueavruntime{$queue}  > 0 ) ?  $queueavruntime{$queue} / $nqueueavruntime{$queue}   : 99999999;
+		$queueavwalltime{$queue} = ($nqueueavwalltime{$queue} > 0 ) ?  $queueavwalltime{$queue} / $nqueueavwalltime{$queue} : 99999999;
+	    }
+	    foreach  $queue (@LsfLocalQueues){
+		$queueavpendtime{$queue} = ($nqueueavpendtime{$queue} > 0 ) ?  $queueavpendtime{$queue} / $nqueueavpendtime{$queue} : 99999999;
+		$queueavruntime{$queue}  = ($nqueueavruntime{$queue}  > 0 ) ?  $queueavruntime{$queue} / $nqueueavruntime{$queue}   : 99999999;
+		$queueavwalltime{$queue} = ($nqueueavwalltime{$queue} > 0 ) ?  $queueavwalltime{$queue} / $nqueueavwalltime{$queue} : 99999999;
+	    }
+	}
+    }
+}
+
+sub Memory($){
+    return if (! $Debug);
+    my $tag =  shift;
+    PrintDebug("$tag:\n");
+    open(MEM,"ps xua | grep $$| grep -v grep|grep -v ps|");
+    while (<MEM>){
+	PrintDebug($_);
+    }
+    close MEM;
+}
+
+sub QueryLSF(){
+    # note: the order of these commands is essential!
+    PrintDebug("start QueryLRMSVersion\n");
+    QueryLRMSVersion();Memory("QueryLRMSVersion");
+
+    PrintDebug("next QueryHostsCPU\n");
+    QueryHostsCPU();Memory("QueryHostsCPU");
+
+    PrintDebug("next QueryHostGroups\n");
+    QueryHostGroups();Memory("QueryHostGroups");
+
+    PrintDebug("next QueryUserGroups\n");
+    QueryUserGroups();Memory("QueryUserGroups");
+
+    PrintDebug("next QueryQueuesInfos\n");
+    QueryQueuesInfos();Memory("QueryQueuesInfos");
+
+    PrintDebug("next QueryJobsInfos\n");
+    QueryJobsInfos();Memory("QueryJobsInfos");
+
+    PrintDebug("next QueryQueueJobSlots\n");
+    QueryQueueJobSlots();Memory("QueryQueueJobSlots");
+}
+
+sub GetDynamicInfoGLUE1 (){
+    # create and return dynamic information
+    # loop over exported queues 
+    my @mydynamicinfo;
+    foreach my $queue (@ExportedLSFGridQueues){
+	next if (! defined $queuemaxcputime{$queue});# don't export queue if this is not defined. This can happen if there is a configuration problem on the CE
+	my $workercount=$TotalSlots{$queue};
+	$workercount=$TotalCPUs{$queue} if (!defined($workercount));
+	
+	my $Time;
+	#Calculate Response Times.
+	#FIXME: response time for internal queues must go in here somehow
+	$queueusedtime{$queue} = 0 if (!defined $queueusedtime{$queue});
+	if ($workercount != 0) {
+	    my $fac = $queuetotaljobs{$queue} * $queuemaxcputime{$queue} - $queueusedtime{$queue};
+	    foreach my $intq (@LsfLocalQueues){
+		$fac += $queuetotaljobs{$intq} * $queuemaxcputime{$intq} - $queueusedtime{$intq};
+		PrintDebug("Response time for $queue $intq \"$queuetotaljobs{$intq}\" \"$queuemaxcputime{$intq}\" \"$queueusedtime{$intq}\" \"$fac\"");
+	    }
+	    $Time=$fac * 60 / $workercount;
+	} else {
+	    $Time=999999;
+	}
+	if ($Time < 0){ $Time = 0;}
+	$Time=~s/\..*//;
+	$Time=~s/\-//;
+	
+	my $WorstTime = $Time;
+	$Time=$Time/2;
+	$Time=~s/\..*//;
+	my $EstimatedTime = $Time;
+	
+	push @mydynamicinfo, "\n$queuedntext{$queue}\n";
+	
+	# batch system version Version
+	
+	push @mydynamicinfo, "GlueCEInfoLRMSVersion: ".$BatchSystemVersion."\n";
+	
+	# get the status of the CE
+        my $Status;
+	$CEProductionState = "Production" if (! defined $CEProductionState);
+	my @States = ("Preproduction","Production","Queueing","Draining","Closed");
+	if ($CEDefaultState && (0<grep {$_ eq $CEDefaultState} @States)){
+	    $Status = $CEDefaultState;
+	} else {
+	    # in the default case, the state is taken from the batch system. 
+	    # if the CE is not queueing,draining or closed it should report the CEProductionState which 
+            # is usually Production but can be set to Preproduction to indicate that this CE
+	    # is up and running but not to be used for production purpose (and non-critical)
+	    
+	    $Status =
+		($queueenabled{$queue} && $queuestarted{$queue}) ? $CEProductionState :
+		($queueenabled{$queue}) ? "Queueing" :
+		($queuestarted{$queue}) ? "Draining" : "Closed" ;
+	}
+	# CPU and slots
+        PrintDebug("creating info for $queue");
+	
+	push @mydynamicinfo, "GlueCEInfoTotalCPUs: "         .$TotalSlots{$queue}."\n"; # Savannah Bug fix #48160 US 31/3/2009
+	push @mydynamicinfo, "GlueCEPolicyAssignedJobSlots: ".$TotalSlots{$queue}."\n";
+	push @mydynamicinfo, "GlueCEPolicyMaxRunningJobs: "  .$TotalSlots{$queue}."\n";
+	push @mydynamicinfo, "GlueCEPolicyMaxCPUTime: "      .$queuemaxcputime{$queue}."\n";
+	push @mydynamicinfo, "GlueCEPolicyMaxWallClockTime: ".$queuemaxwalltime{$queue}."\n";
+	push @mydynamicinfo, "GlueCEPolicyPriority: "        .$queuepriority{$queue}."\n";
+	#push @mydynamicinfo, "GlueCEStateFreeCPUs: "         .$FreeCPU{$queue}."\n";
+	#push @mydynamicinfo, "GlueCEStateFreeJobSlots: "     .$FreeSlots{$queue}."\n";
+	push @mydynamicinfo, "GlueCEStateStatus: "           .$Status."\n";
+    }
+    return @mydynamicinfo;
+}
+
+sub GetDynamicInfoGLUE2 (){
+    # create and return dynamic information in glue2 format
+    my $TimeNow = strftime("%Y-%m-%dT%H:%M:%SZ", gmtime());
+    # loop over exported queues 
+    my @mydynamicinfo;
+    push @mydynamicinfo, $compdntext;
+    push @mydynamicinfo, "GLUE2ManagerProductVersion: ".$BatchSystemVersion."\n";
+    push @mydynamicinfo, "GLUE2EntityCreationTime: $TimeNow\n";
+    PrintDebug("DEBUG: Glue2: pushing \"$compdntext\" block for printing");
+    my $queue;
+    foreach my $dntext (@GLUE2LSFShare){
+	$queue = $GLUE2LSFShareMappedQueue{$dntext};
+	next if (! defined $queuemaxcputime{$queue});# don't export queue if this is not defined. This can happen if there is a configuration problem on the CE
+	my $workercount=$TotalSlots{$queue};
+	$workercount=$TotalCPUs{$queue} if (!defined($workercount));
+
+	my $Time;
+	#Calculate Response Times.
+	#FIXME: response time for internal queues must go in here somehow
+	$queueusedtime{$queue} = 0 if (!defined $queueusedtime{$queue});
+	if ($workercount != 0) {
+	    my $fac = $queuetotaljobs{$queue} * $queuemaxcputime{$queue} - $queueusedtime{$queue};
+	    foreach my $intq (@LsfLocalQueues){
+		$fac += $queuetotaljobs{$intq} * $queuemaxcputime{$intq} - $queueusedtime{$intq};
+		PrintDebug("Response time for $queue $intq \"$queuetotaljobs{$intq}\" \"$queuemaxcputime{$intq}\" \"$queueusedtime{$intq}\" \"$fac\"");
+	    }
+	    $Time=$fac * 60 / $workercount;
+	} else {
+	    $Time=999999;
+	}
+	if ($Time < 0){ $Time = 0;}
+	$Time=~s/\..*//;
+	$Time=~s/\-//;
+
+	my $WorstTime = $Time;
+	$Time=$Time/2;
+	$Time=~s/\..*//;
+	my $EstimatedTime = $Time;
+
+	push @mydynamicinfo, "\n$dntext\n";
+	# get the status of the CE
+        my $Status;
+	$CEProductionState = "Production" if (! defined $CEProductionState);
+	my @States = ("Preproduction","Production","Queueing","Draining","Closed");
+	if ($CEDefaultState && (0<grep {$_ eq $CEDefaultState} @States)){
+	    $Status = $CEDefaultState;
+	} else {
+	    # in the default case, the state is taken from the batch system. 
+	    # if the CE is not queueing,draining or closed it should report the CEProductionState which 
+            # is usually Production but can be set to Preproduction to indicate that this CE
+	    # is up and running but not to be used for production purpose (and non-critical)
+	    
+	    $Status =
+		($queueenabled{$queue} && $queuestarted{$queue}) ? $CEProductionState :
+		($queueenabled{$queue}) ? "Queueing" :
+		($queuestarted{$queue}) ? "Draining" : "Closed" ;
+	}
+	# CPU and slots
+        PrintDebug("creating info for $queue");
+	push @mydynamicinfo, "GLUE2EntityCreationTime: $TimeNow\n";
+	push @mydynamicinfo, "GLUE2ComputingShareMaxRunningJobs: "  .$TotalSlots{$queue}."\n";
+	push @mydynamicinfo, "GLUE2ComputingShareDefaultCPUTime: "      .$queuemaxcputime{$queue}."\n";
+	push @mydynamicinfo, "GLUE2ComputingShareDefaultWallTime: ".$queuemaxwalltime{$queue}."\n";
+	push @mydynamicinfo, "GLUE2ComputingShareServingState: "           .lc($Status)."\n";
+	# fixme: GlueCEPolicyMaxObtainableCPUTime GlueCEPolicyMaxObtainableWallClockTime should be the hard limit if defined
+	push @mydynamicinfo, "GLUE2ComputingShareMaxCPUTime: "      .$queuemaxcputime{$queue}."\n";
+	push @mydynamicinfo, "GLUE2ComputingShareMaxWallTime: ".$queuemaxwalltime{$queue}."\n";
+    }
+    return @mydynamicinfo;
+}
+
+sub WriteLRMSInfo(){
+    $schedCycle =  120 if (! defined $schedCycle);
+    # get and save the LRMS information
+    my @mylrmsinfo;
+    my $jobvalue;
+    push @mylrmsinfo, "nactive		$nactive\n";
+    push @mylrmsinfo, "nfree		$nfree\n";
+    push @mylrmsinfo, "now		$NowEpoch\n";
+    push @mylrmsinfo, "schedCycle	$schedCycle\n";
+    foreach my $job (@lrmsjobinfo){
+	push @mylrmsinfo,"{";
+	push @mylrmsinfo, $job;
+	push @mylrmsinfo,"}\n";
+    }
+    WriteFileLock($LRMSInfoFile,@mylrmsinfo);
+}
+
+# main program
+my $startstamp = time();
+if (defined $ENV{"INFO_DYNAMIC_LSF_DEBUG"}){
+    $Debug = 1; 
+}
+
+# default: use system groups
+$ReportWhichGroup = "GID";
+
+# read configuration file and ldif input
+ReadInputs();
+
+@AllGridQueues = @ExportedLSFGridQueues;
+push @AllGridQueues, @LsfLocalQueues;
+
+# initialize some values
+foreach  my $queue (@AllGridQueues){
+    $nqueueavpendtime{$queue} = $nqueueavruntime{$queue} = $nqueueavwalltime{$queue} = 1;
+    $queueavpendtime{$queue} = $queueavruntime{$queue}  = $queueavwalltime{$queue}   = 0;
+}
+
+QueryLSF();
+
+# print dynamic info to STDOUT
+if ($GlueFormat =~ /glue1/||$GlueFormat =~ /both/){
+    my @DynamicInfo=GetDynamicInfoGLUE1();
+    foreach (@DynamicInfo){
+	print $_;
+    }
+}
+if ($GlueFormat =~ /glue2/||$GlueFormat =~ /both/){
+    print "\n" if $GlueFormat =~ /both/;
+    my @DynamicInfo=GetDynamicInfoGLUE2();
+    foreach (@DynamicInfo){
+	print $_;
+    }
+}
+
+
+# update LRMSinfo file
+WriteLRMSInfo();
+my $timeneeded = time() - $startstamp;
+
+PrintDebug("done after $timeneeded seconds");
+
+
+
+

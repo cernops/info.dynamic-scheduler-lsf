@@ -1,0 +1,27 @@
+=head1 NAME
+
+date2epoch
+
+=head1 SYNOPSIS
+
+date2epoch [--sec <seconds>] [--min <minutes>] [--hour <hours>] [--day <day>] [--month <month>] [--year <year>][--st [-1|0|1]] [--quiet]
+
+
+=head1 DESCRIPTION
+
+date2epoch returns the epoch that corresponds to a given date. The date is given in from of 
+command line options, see above.
+
+=head1 BUGS
+
+None known.
+
+=head1 AUTHOR
+
+Ulrich Schwickerath <ulrich.schwickerath@cern.ch>
+
+=head1 SEE ALSO
+
+mktime(3)
+
+=cut

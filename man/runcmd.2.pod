@@ -1,0 +1,29 @@
+=head1 NAME
+
+runcmd
+
+=head1 SYNOPSIS
+
+runcmd <command>
+
+=head1 DESCRIPTION
+
+runcmd is a wrapper designed for running external commands with caching. The output produced by <command> will be cached for a period of time which can be configured in 
+
+/etc/lrms/lsf.conf
+
+This is specifically useful for LSF batch query commands, if the cache directory (to be defined in /etc/lrms/lsf.conf) is shared between many host.
+
+=head1 BUGS
+
+None known.
+
+=head1 AUTHOR
+
+Ulrich Schwickerath
+
+=head1 SEE ALSO
+lsf.conf[2]
+
+=cut
+

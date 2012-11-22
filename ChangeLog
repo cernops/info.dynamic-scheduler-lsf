@@ -1,0 +1,32 @@
+2011-12-11 Ulrich Schwickerath <ulrich.schwickerath at cern.ch> -2.1.1-7
+	* add missing perl module use
+	* fix for Savannah bug #77106
+2011-12-10 Ulrich Schwickerath <ulrich.schwickerath at cern.ch> -2.1.1-5
+	* bug fixes for GLUE2 publication
+	* path updates for new location of ldif files for GLUE2
+	* add publication of GLUE2EntityCreationTime
+2011-12-06 Ulrich Schwickerath <ulrich.schwickerath at cern.ch> -2.1.1-1
+	* EPEL compliancy fixes
+	* add support for GLUE2
+	* add man pages
+2011-23-03 Ulrich Schwickerath <ulrich.schwickerath at cern.ch> -2.0.20-1
+	* EGI patches
+	* fix for Savannah bug #79387
+2011-18-02 Ulrich Schwickerath <ulrich.schwickerath at cern.ch> -2.0.19-2
+	* fix for #55675 (to be confirmed)
+	* fix for #63697
+	* fix for #72187
+	* fix for #2449
+	* several scalability improvements
+2010-14-01 Ulrich Schwickerath <ulrich.schwickerath at cern.ch> -2.0.8-1
+	* Security improvements
+2009-31-03 Ulrich Schwickerath <ulrich.schwickerath at cern.ch> -2.0.5-1
+	* fix Savannah bug #48735
+2009-31-03  Ulrich Schwickerath <ulrich.schwickerath at cern.ch> -2.0.4-1
+	* fix Savannah bug #48160
+2008-11-08  Ulrich Schwickerath <ulrich.schwickerath at cern.ch> -2.0.3-1
+	* add support for default production status. A CE can now be in Production or in Preproduction unless it is in one of the non-production states. Default is Production
+2008-11-08  Ulrich Schwickerath <ulrich.schwickerath at cern.ch> -2.0.2-2
+	* Fix bug #43715
+2007-09-06  Ulrich Schwickerath <ulrich.schwickerath at cern.ch> -2.0.2:
+	* gLite patches

@@ -1,0 +1,8 @@
+Revision history for Perl extension EGI::CommandProxyTools.
+
+2.1.0 Mon Nov 28  16:20:00 2011
+        - add GLUE2 support
+2.0.20 Wed Mar 23 16:22:14 2011
+	- add proper packaging for EGI
+
+

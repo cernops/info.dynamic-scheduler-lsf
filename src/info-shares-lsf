@@ -1,0 +1,145 @@
+#!/usr/bin/perl -w
+#
+# File:		$Id: info-shares-lsf,v 1.3 2012/04/04 07:19:15 uschwick Exp $
+# Author(s): Ulrich Schwickerath <ulrich.schwickerath@cern.ch>
+# Changes:      
+#               $Log: info-shares-lsf,v $
+#               Revision 1.3  2012/04/04 07:19:15  uschwick
+#               include path fix for slc6
+#
+#               Revision 1.2  2012/01/12 14:00:27  uschwick
+#               configure time out for commands
+#
+#               Revision 1.1  2011/12/06 17:53:14  uschwick
+#               glue2 support
+#
+#               Revision 1.4  2011/03/25 20:46:40  uschwick
+#               add documentation and btools sources
+#
+#               Revision 1.3  2011/03/23 17:14:28  uschwick
+#               EGI patches
+#
+#               Revision 1.1  2011/02/18 22:10:54  uschwick
+#               scalability patches, #63697 #72187 #55675
+#
+
+
+# format:
+#
+# GlueCECapability: CPUScalingReferenceSI00=1273 
+# GlueCECapability: Share=cms:80 
+# GlueCECapability: Share=dteam:10 
+# GlueCECapability: Share=lhcb:10 
+
+use lib '/usr/lib/perl5/vendor_perl/EGI';
+use lib '/usr/lib/perl5/vendor_perl';
+use strict;
+use diagnostics;
+use EGI::CommandProxyTools;
+
+our $MapFile; # = "/etc/lrms/lcg-info-dynamic-scheduler.conf";
+my @vos;
+my $hostpartition = "SHARE";
+our $CPUScalingReferenceSI00=1;
+my $debug = 0;
+my $binPath; # location of lsf executables
+my %shares;
+
+sub Usage {
+    print "Usage: $0 /path/to/lsf/binaries [scheduler config file]\n";
+    exit 0 ;
+}
+
+sub GetListOfVos($){
+    my $inputfile = shift;
+    my $readnow = 0;
+    if (open(IN,"<".$inputfile)){
+	while (<IN>){
+	    if (/vomap\ s*\:/){
+		$readnow = 1 ; 
+		next;
+	    };
+	    if ($readnow) {
+		if (/\s*([\d\w\_]+)\:([\d\w\_]+)\s*/){
+		    my $lsfgroup = $1;
+		    my $vo = $2;
+		    chomp $vo;
+		    #print "Parsing: LSF Group: \"$lsfgroup\" for VO \"$vo\"\n" if $debug; 
+		    push @vos, $vo if (0 == grep(/$vo/,@vos));
+		}
+	    }
+	}
+	close IN;
+    } else {
+	print "FATAL: Cannot open \"$inputfile\". Aborting";
+	exit(1)
+    }
+}
+
+sub Parsebhpart{
+    my $command = "$binPath/bhpart $hostpartition";
+    my $startreading = 0;
+    my $total = 0;
+    my %bhpart;
+    foreach (@{RunCommand("$command")}){
+	chomp;
+	if (/USER\/GROUP/){
+	    $startreading = 1;
+	    next
+	}
+	if ($startreading){
+	    my ($lsfgroup,$share,@rest) = split(/\s+/,$_);
+	    #print "lsfgroup: $lsfgroup has share $share\n" if $debug;
+	    $total += $share;
+	    $shares{$lsfgroup} = $share
+	}
+    }
+    # normalize
+    if ($total > 0){
+	foreach my $lsfgroup (keys %shares){
+	    $shares{$lsfgroup} /= $total;
+	}
+    } else {
+	print "ERROR: Total share is zero !\n";
+	exit (1);
+    }
+}
+#
+# read config from configuration file
+#
+# default bin path
+$binPath="/usr/bin";
+
+if ($ARGV[0] && ! $binPath) {
+    $binPath=$ARGV[0];
+}
+chomp($binPath);
+IniCommandProxyTools($binPath);
+
+if ($ARGV[1] && ! $MapFile) {
+    $MapFile = $ARGV[1]; 
+}
+
+ReadInfoDynamicLsfConf();
+GetListOfVos($MapFile);
+Parsebhpart();
+
+# print results
+my $hostname =`hostname -f`;
+
+chomp $hostname;
+
+print "dn: GlueSubClusterUniqueID=$hostname, GlueClusterUniqueID=$hostname, mds-vo-name=resource,o=grid\n";
+print "GlueCECapability: CPUScalingReferenceSI00=${CPUScalingReferenceSI00}\n";
+print "GlueCECapability: glexec\n" if ($glExec =~ /[yto]/);
+foreach my $vo (@vos){
+    my $group = "u_".uc($vo);
+    foreach my $lsfgroup (keys %shares){
+	#print "$lsfgroup , $vo" . "\n";
+	if ($lsfgroup eq $group){
+	    print "GlueCECapability: Share=${vo}:".int(0.5+100.0*($shares{$lsfgroup}))."\n";
+	}
+    }
+}
+
+

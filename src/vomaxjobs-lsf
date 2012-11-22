@@ -1,0 +1,169 @@
+#!/usr/bin/perl -w 
+use lib '/usr/lib/perl5/vendor_perl/EGI';
+use lib '/usr/lib/perl5/vendor_perl';
+use strict;
+use diagnostics;
+use Date::Parse;
+use File::Basename;
+use EGI::CommandProxyTools;
+
+#fixme
+my $mapfile = "/etc/lrms/scheduler.conf";
+#my $mapfile = "/opt/glite/etc/lcg-info-dynamic-scheduler.conf";
+
+my @vos;
+my @lsfgroups;
+my @SpecialUsers;
+my %vomap;
+my %Grouplimits;
+my %Userlimits;
+my %DefaultLimit;
+my $debug = 0;
+
+$debug = 1 if $ENV{DEBUG};
+# 
+# try to guess the LSF installation path
+#
+
+
+# first read the config file, then initialize everything
+ReadInfoDynamicLsfConf();
+if ($ARGV[0] && ! $binPath) {
+    $binPath=$ARGV[0];
+}
+chomp($binPath);
+
+sub GetListOfVos($){
+    my $inputfile = shift;
+    my $readnow = 0;
+    if (open(IN,"<".$inputfile)){
+	while (<IN>){
+	    if (/vomap\ s*\:/){
+		$readnow = 1 ; 
+		next;
+	    };
+	    if ($readnow) {
+		if (/\s*([\d\w\_]+)\:([\d\w\_]+)\s*/){
+		    my $lsfgroup = $1;
+		    my $vo = $2;
+		    chomp $vo;
+		    chomp $lsfgroup;
+		    #print "Parsing: LSF Group: \"$lsfgroup\" for VO \"$vo\"\n" if $debug; 
+		    push @lsfgroups, $lsfgroup if (0 == grep($lsfgroup eq $_,@lsfgroups));
+		    push @vos, $vo if (0 == grep($vo eq $_,@vos));
+		    $vomap{$lsfgroup} = lc($vo);
+		}
+	    }
+	}
+	close IN;
+    } else {
+	print "FATAL: Cannot open $inputfile. Aborting";
+	exit(1)
+    }
+}
+
+sub GetLimits($){
+    my $groupname = shift;
+    chomp $groupname;
+    my $vo = lc($vomap{$groupname});
+    #print $vomap{$groupname} . "\n";
+    my $command = "$binPath/blimits -w -c -u $groupname";
+    my $limit = 0;
+    my $per_user;
+    my $per_queue;
+    my $slots;
+    foreach (@{RunCommand("$command")}){
+	chomp;
+	$per_user  = $1 if /PER_USER\s*=\s*(.+)/;
+	$per_queue = $1 if /PER_QUEUE\s*=\s*(\S+)/;
+	$slots = $1 if /SLOTS\s*=\s*(\d+)/;
+	if (/End\s+Limit/i){
+	    #print "DEBUG: $groupname \"$per_queue\" $slots $vo\n";
+	    # handle default
+	    if (defined $per_user && defined $slots && $slots>0 ){
+		# general limit, not per queue
+		print "DEBUG: per_user list is $per_user\n" if ($debug);
+		foreach (split(/\s+/,$per_user)){
+		    if (/^all$/){
+			$DefaultLimit{$groupname} = $slots;
+			next;
+		    }
+		    print "DEBUG: examining entry: $_ for \"$groupname\" with limit $slots\n" if ($debug);
+		    if (/\/$/) {
+			next if /^\~/; # limit does NOT apply for this entry
+			chop;
+			# this is a group limit
+			$limit = $slots unless (defined $per_queue);
+			next;
+		    } else {
+			# user limit ?
+			if (/^\~/){
+			    s/^\~//;
+			    print "DEBUG: SPECIAL USER CANDIDATE: $_\n" if ($debug);
+			    push @SpecialUsers, $_;
+			} else {
+			    $Userlimits{$_} = $slots;
+			}
+		    }
+		}
+	    }
+	    #if (defined $per_user && defined $slots && $slots > 0 && ($per_user =~ /$groupname/) ){
+	    #	if (! defined $limit) {
+	    #	    $limit = $slots;
+	    #	} else {  
+	    #	    $limit = $slots if ($slots>$limit);
+	    #	}
+	    #}
+	    #if (defined $per_queue && defined $slots && $slots > 0 && ($per_queue =~ /$vo/)){
+	    #	if (! defined $slots){
+	    #	    $limit = $slots;
+	    #	} else {
+	    #	    $limit = $slots if ($slots>$limit);
+	    #	}
+	    #}	    
+	    undef $per_user;
+	    undef $per_queue;
+	    undef $slots;
+	}
+    }
+    return $limit;
+}
+
+sub GetAllLimits(){
+    foreach my $lsfgroup (@lsfgroups){
+	my $limit = GetLimits($lsfgroup);
+	$Grouplimits{$lsfgroup} = $limit if $limit > 0;
+    }
+    foreach my $lsfuser (@SpecialUsers){
+	my $limit = GetLimits($lsfuser);
+	$Userlimits{$lsfuser} = $limit if $limit > 0;
+    }
+}
+
+sub PrintAllLimits(){
+    my $i = 0;
+    if ((scalar keys %Grouplimits > 0)||(scalar keys %Userlimits > 0)){
+	print "{";
+	foreach my $lsfgroup (@lsfgroups){	    
+	    if (defined $Grouplimits{$lsfgroup}){
+		my $limit = $Grouplimits{$lsfgroup};
+		print "," unless ($i == 0);
+		print "\'" . $lsfgroup .  "\': " . $limit; 
+		$i++;
+	    }
+	}
+	foreach my $lsfuser (keys %Userlimits) {
+	    my $limit = $Userlimits{$lsfuser};
+	    print "," unless ($i == 0);
+	    print "\'" . $lsfuser .  "\': " . $limit; 
+	    $i++;
+	}
+	print "}\n";
+    }   
+}
+
+IniCommandProxyTools($binPath);
+GetListOfVos($mapfile);
+GetAllLimits();
+PrintAllLimits();
+

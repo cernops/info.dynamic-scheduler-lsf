@@ -1,0 +1,26 @@
+=head1 NAME
+
+vomaxjobs-lsf
+
+=head1 SYNOPSIS
+
+vomaxjobs-lsf
+
+=head1 DESCRIPTION
+
+vomaxjobs-lsf produces vo specific output as described in /opt/lcg/share/doc/lcg-info-dynamic-scheduler/vomaxjobs-generic.txt
+
+=head1 BUGS
+
+The tool needs to have some information about the mapping between LSF groups and VOs. This information is present in the lcg-info-dynamic-scheduler configuration file. At gLite times this configuration files could be found in /opt/glite/etc. It is now expected to be in /etc/lrms/scheduler.conf. On some installations this may need to be linked to the actual location of this configuration file.
+
+None known.
+
+=head1 AUTHOR
+
+Ulrich Schwickerath
+
+=head1 SEE ALSO
+
+=cut
+

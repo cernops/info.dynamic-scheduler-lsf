@@ -1,0 +1,24 @@
+=head1 NAME
+
+lrmsinfo-lsf
+
+=head1 SYNOPSIS
+
+lrmsinfo-lsf
+
+=head1 DESCRIPTION
+
+This tool returns the output required by lcg-info-dynamic-scheduler, to calculate the estimated response time ERT. 
+
+=head1 BUGS
+
+None known.
+
+=head1 AUTHOR
+
+Ulrich Schwickerath
+
+=head1 SEE ALSO
+
+=cut
+

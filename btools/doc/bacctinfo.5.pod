@@ -1,0 +1,144 @@
+=head1 NAME
+
+bacctinfo
+
+=head1 SYNOPSIS
+
+cat lsb.acct | B<bacctinfo> [B<--help>] [B<--start> epoch] [B<--end> epoch] 
+  [B<--user> [all | user name]] [B<--quiet>]
+
+=head1 DESCRIPTION
+
+bacctinfo uses the LSF API to create extensive statistics for a given lsf user group
+(given as command line argument user), or for all the ones contained in the accounting
+file, starting at start epoch until end epoch. The records to be analysed are read
+from STDIN. Both cumulative and day-by-day statistics are returned. Sampling starts
+either at the requested time, or at the time of the first JOB_FINISH record that is
+found in the input.
+
+For each sampling period a block of six lines of output is returned. Each line contains the following 
+information:
+
+=item * group name 
+
+=item * user name (if the option --user has been specified)
+
+=item * sub group index (1=running in queue which starts with "grid_", 2=other, 3=sum)
+
+=item * epoch starting time of current time window
+
+=item * job throughput (jobs/hour) including jobs that were killed while pending 
+
+=item * number of jobs that were killed while in pending state 
+
+=item * number of jobs analysed
+
+=item * number of succeeded jobs (DONE state)
+
+=item * number of failed jobs (EXIT state)
+
+=item * number of jobs terminated by an administrator
+
+=item * number of jobs terminated by the user
+
+=item * number of jobs killed by LSF because the CPU time limit was reached
+
+=item * number of jobs killed by LSF because the RUN time limit was exceeded
+
+=item * total block input
+ 
+=item * total block output
+
+=item * mean value of block input
+ 
+=item * mean value of block output
+
+=item * standard deviation on mean block input
+
+=item * standard deviation on mean block output
+
+=item * accumulated daily kSi2k Wall time
+
+=item * accumulated daily kSi2k CPU time
+
+=item * average kSi2k Wall time used per day
+
+=item * average kSi2k CPU time used per day
+
+=item * average pending time (real time)
+
+=item * average run time (real time)
+
+=item * standard deviation of average pending time (real time)
+
+=item * standard deviation of average run time
+
+=item * average pending time (normalized time)
+
+=item * average run time (normalized time)
+
+=item * standard deviation of average normalized pending time
+
+=item * standard deviation of average normalized run time
+
+=item * average max RMem
+
+=item * average max RSwap
+
+=item * standard deviation of average max RMem
+
+=item * standard deviation of average max RSwap
+
+=item * average user time
+
+=item * average system time
+
+=item * standard deviation of average user time
+
+=item * standard deviation of average system time
+
+=item * average number of times the jobs were swapped out
+
+=item * average cpu utilisation (defined as (usr+sys)/runtime)
+
+=item * standard deviation of cpu utilisation
+
+
+
+The first three lines represend day-by-day statistics, the following three lines are cumulative results. 
+The lines inside each block can be distinguished by their "sub group index"
+
+1  current day statistics for jobs submitted 
+   from a submission host who's name starts with "ce"
+
+2  current day statistics for all other jobs
+
+3  current day statistics for all jobs (sum of the two above)
+
+5  cumulated statistics for jobs submitted from a submission 
+   host who's name starts with "ce"
+
+6  cumulated statistics all other jobs
+
+7  cumulated statistics all jobs (sum of the two above)
+
+
+The output is returned in a machine readable from, the fields above are separated by a space character.
+If no samples are found, both mean and standard deviation values default to zero. If the sample contains 
+only one entry, a 100% error is assumed. 
+
+=head1 BUGS
+
+Some accumulative values may return a NaN value.
+
+=head1 AUTHORS
+
+Ulrich Schwickerath <ulrich.schwickerath@cern.ch>
+
+Daniel Micol Ponce <daniel.micol.ponce@cern.ch>
+
+=head1 SEE ALSO
+
+lsb.acct(5)        
+
+=cut

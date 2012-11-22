@@ -1,0 +1,28 @@
+#!/usr/bin/perl 
+use lib '/usr/lib/perl5/vendor_perl/EGI';
+use lib '/usr/lib/perl5/vendor_perl';
+use strict;
+use diagnostics;
+use EGI::CommandProxyTools;
+
+# global parameters
+our $Debug = 0; # debugging output to STDERR
+
+#
+# initialize the tool
+#
+
+if (defined $ENV{"INFO_DYNAMIC_LSF_DEBUG"}){
+    $Debug = 1; 
+}
+
+$binPath="/usr/bin";
+IniCommandProxyTools($binPath);
+ReadInfoDynamicLsfConf();
+#
+# run the command
+#
+my $command = join(" " ,@ARGV);
+foreach (@{RunCommand($command)}){
+    print $_;
+}

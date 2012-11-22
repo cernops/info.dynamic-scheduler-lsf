@@ -1,0 +1,34 @@
+#!/usr/bin/perl -w
+#
+# File          $Id: lrmsinfo-lsf,v 1.7 2012/04/04 07:19:15 uschwick Exp $
+#
+# Purpose       LRMS Info for reporting from LSF on job status
+#
+# Print out for LRMS info report
+use lib '/usr/lib/perl5/vendor_perl/EGI';
+use lib '/usr/lib/perl5/vendor_perl';
+use strict;
+use diagnostics;
+use Date::Parse;
+use File::Basename;
+use EGI::CommandProxyTools;
+
+# 
+# try to guess the LSF installation path
+#
+
+# first read the config file, then initialize everything
+$binPath="/usr/bin";
+if ($ARGV[0] && ! $binPath) {
+    $binPath=$ARGV[0];
+}
+chomp($binPath);
+IniCommandProxyTools($binPath);
+
+ReadInfoDynamicLsfConf();
+if (-e $LRMSInfoFile){
+   my @lrmsinfo = ReadFileLock($LRMSInfoFile);
+   foreach (@lrmsinfo){print $_};
+} else {
+   die "Cannot fine $LRMSInfoFile";
+}
