@@ -1,11 +1,8 @@
 /* 
    (C) CERN, Ulrich Schwickerath <ulrich.schwickerath@cern.ch> 
-   File:      $Id: bhostsinfo.c,v 1.1 2011/03/24 14:49:16 uschwick Exp $
+   File:      $Id: bhostsinfo.c,v 1.7 2006/12/08 17:05:35 uschwick Exp $
    ChangeLog: 
               $Log: bhostsinfo.c,v $
-              Revision 1.1  2011/03/24 14:49:16  uschwick
-              add btools toolsuite
-
               Revision 1.7  2006/12/08 17:05:35  uschwick
               added protection against crazy real_Load values in bhostsinfo
 
@@ -138,19 +135,20 @@ int main(int argc, char* argv[]){
   int numHosts1 = 0;
   int numHosts2 = 0;
   int options   = 0;
- 
+  
   int i,j,k;
   double real_load = 0.0;
   double load = 0.0;
+  int slots = 0;
   
   char* Resource = NULL;
-
+  
   resource[0]=0;
   readOptions(argc,argv);
   if (0<strlen(resource)) {
     Resource = resource;
   }
-
+  
   if (lsb_init(argv[0]) < 0){
     lsb_perror("bhostsinfo: lsb_init() failed");
     exit (-1);
@@ -183,13 +181,16 @@ int main(int argc, char* argv[]){
 	  if ((real_load = *(hInfo1[i].realLoad))>5000){
 	    real_load = load;
 	  };
+	  /* same for maxJobs */
+	  slots = (hInfo1[i].maxJobs> 1000) ? 0 : hInfo1[i].maxJobs;
+	  
 	  printf("%s %s %f %f %f %d %d %d %d %d %d ",
 		 hInfo1[i].host,
 		 hInfo2[j].hostType,
 		 hInfo1[i].cpuFactor,
 		 load,
 		 real_load,
-		 hInfo1[i].maxJobs,
+		 slots,
 		 hInfo1[i].numJobs,
 		 hInfo1[i].numRUN,
 		 hInfo1[i].numSSUSP,
