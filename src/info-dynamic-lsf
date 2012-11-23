@@ -63,6 +63,7 @@ my %queuerunningjobs;
 my %queuessuspjobs;
 my %queuetotaljobs;
 my %queuepriority;
+my %queuemaxjobsperuser;
 my %queuemaxcputime;
 my %queuemaxwalltime;
 my %queueenabled;
@@ -640,7 +641,7 @@ sub QueryQueuesInfos {
     my $command = "$binPath/bqueues -l ";
     my $QueueName;
     my $i;
-    my ($MaxJobs,$PrioIndex,$QueuedJobs,$RunningJobs,$PSUSPJobs,$USUSPJobs,$SSUSPJobs,$TotalJobs,$MaxCPUTime,$MaxWallTime);
+    my ($MaxJobs,$MaxJobsPerUser,$PrioIndex,$QueuedJobs,$RunningJobs,$PSUSPJobs,$USUSPJobs,$SSUSPJobs,$TotalJobs,$MaxCPUTime,$MaxWallTime);
     my $input;
     foreach $input (@{RunCommand("$command")}){
 	chomp $input;
@@ -743,6 +744,13 @@ sub QueryQueuesInfos {
 	    undef $MaxJobs;
 	}
 
+	if ($MaxJobsPerUser){
+	    if("$line[$MaxJobsPerUser]" ne "-"){
+	        $queuemaxjobsperuser{$QueueName}=$line[$MaxJobsPerUser];
+            }
+	    undef $MaxJobs;
+	}
+
         if (defined($PrioIndex)) {
 	    # -value since it is low for high priority
             $queuepriority{$QueueName}=-$line[$PrioIndex];
@@ -773,6 +781,7 @@ sub QueryQueuesInfos {
 	for (@line){
 	  SWITCH:{ 
 	      (m/^MAX$/)      && do { $MaxJobs     = $i; };
+	      (m/^JL\/U$/)    && do { $MaxJobsPerUser = $i; };
               (m/^PRIO$/)     && do { $PrioIndex   = $i; };
 	      (m/^PEND$/)     && do { $QueuedJobs  = $i; };
 	      (m/^RUN$/)      && do { $RunningJobs = $i; };
@@ -1350,10 +1359,13 @@ sub GetDynamicInfoGLUE1 (){
 	}
 	# CPU and slots
         PrintDebug("creating info for $queue");
-	
+	# Savannah bug #95182
+	my $maxjobs = (defined $queuetotalslots{$queue})  ?  $queuetotalslots{$queue} : $TotalSlots{$queue};
+	$maxjobs =  $queuemaxjobsperuser{$queue} if (defined $queuemaxjobsperuser{$queue});
 	push @mydynamicinfo, "GlueCEInfoTotalCPUs: "         .$TotalSlots{$queue}."\n"; # Savannah Bug fix #48160 US 31/3/2009
 	push @mydynamicinfo, "GlueCEPolicyAssignedJobSlots: ".$TotalSlots{$queue}."\n";
-	push @mydynamicinfo, "GlueCEPolicyMaxRunningJobs: "  .$TotalSlots{$queue}."\n";
+	push @mydynamicinfo, "GlueCEPolicyMaxRunningJobs: "  .$maxjobs."\n";
+	push @mydynamicinfo, "GlueCEPolicyMaxSlotsPerJob: "  .$maxjobs."\n";
 	push @mydynamicinfo, "GlueCEPolicyMaxCPUTime: "      .$queuemaxcputime{$queue}."\n";
 	push @mydynamicinfo, "GlueCEPolicyMaxWallClockTime: ".$queuemaxwalltime{$queue}."\n";
 	push @mydynamicinfo, "GlueCEPolicyPriority: "        .$queuepriority{$queue}."\n";
