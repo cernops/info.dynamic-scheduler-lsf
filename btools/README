@@ -1,0 +1,10 @@
+Installation:
+-------------
+- ensure that you have rpm-build, autoconf and automake installed
+
+- run 
+./autogen.sh
+./configure
+make rpm
+
+

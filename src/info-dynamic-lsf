@@ -32,14 +32,18 @@ my @HostResourceKeys;
 # global variables
 my $binTools = "/usr/bin";
 
-# the LRMS version
-my $BatchSystemVersion;
 
 # user and host group information 
 my %group2users; 
 my %users2groups; 
 my %hostgroups; 
 my @toplevellsfusergroups;
+
+# LSF global parameters and defaults
+my $MaxNumberOfJobs = 500000; # default corresponding to scalability limit of LSF
+# the LRMS version
+my $BatchSystemVersion;
+my $TotalRunningJobs = 0;
 
 # detailed information about the queues
 my @ExportedLSFGridQueues; # list of queues to be considered
@@ -87,6 +91,7 @@ my %FreeCPU;
 my %FreeSlots;
 my %TotalSlots;
 my %TryTotalSlots;
+my $MaxSlotsPerHost = 0;
 
 # host specific information
 my %reshosts;
@@ -348,6 +353,14 @@ sub QueryLRMSVersion{
     }
 }
 
+sub QueryLSFParams (){
+    my $command = "$binPath/bparams -a ";
+    foreach (@{RunCommand($command)}){
+	$MaxNumberOfJobs = $1 if /\s*MAX_PEND_JOBS\s*=\s*(\d+)/;
+    }
+}
+
+
 sub QueryHostGroups {
     # resolve recursively  
     my $command = "$binPath/bmgroup -r -w ";
@@ -514,6 +527,8 @@ sub QueryHostsResReq0{
 		$resHostSlotsFree{$hostname}{$res_key} = 0;
 	    } else {
 		if ($MyMaxJobs =~ /^\d+$/ && $MyMaxJobs>0) {
+		    PrintDebug("SlotCount: $MyMaxJobs and  $MaxSlotsPerHost\n");
+		    $MaxSlotsPerHost = $MyMaxJobs if ($MyMaxJobs>$MaxSlotsPerHost);
 		    $resHostSlots{$hostname}{$res_key}=$MyMaxJobs;
 		    $ResTryTotalSlots{$res_key}+=$MyMaxJobs;
 		    PrintDebug("Host:$hostname Key:$res_key STATUS:$HostStatus\n");
@@ -606,6 +621,8 @@ sub QueryHostsResReqTools{
 		$resHostSlotsFree{$hostname}{$res_key} = 0;
 	    } else {
 		if ($MyMaxJobs =~ /^\d+$/ && $MyMaxJobs>0) {
+		    PrintDebug("SlotCount: $MyMaxJobs and  $MaxSlotsPerHost\n");
+		    $MaxSlotsPerHost = $MyMaxJobs if ($MyMaxJobs>$MaxSlotsPerHost);
 		    $resHostSlots{$hostname}{$res_key}=$MyMaxJobs;
 		    $ResTryTotalSlots{$res_key}+=$MyMaxJobs;
 		    #PrintDebug("Host:$hostname Key:$res_key STATUS:$HostStatus\n");
@@ -745,10 +762,24 @@ sub QueryQueuesInfos {
 	}
 
 	if ($MaxJobsPerUser){
-	    if("$line[$MaxJobsPerUser]" ne "-"){
+	    if((defined $line[$MaxJobsPerUser]) && $line[$MaxJobsPerUser] ne "-"){
 	        $queuemaxjobsperuser{$QueueName}=$line[$MaxJobsPerUser];
             }
-	    undef $MaxJobs;
+	    undef $MaxJobsPerUser;
+	}
+	# count all running jobs, mapping suspended to running
+	PrintDebug("DEBUG line arrays is now \"".join(",",@line)."\n");
+	if ($RunningJobs && (defined $line[$RunningJobs])){
+	    $TotalRunningJobs += $line[$RunningJobs] unless ($line[$RunningJobs] eq '-'); 
+	    undef $RunningJobs;
+	}
+	if ($USUSPJobs && (defined $line[$USUSPJobs])){
+	    $TotalRunningJobs += $line[$USUSPJobs] unless ($line[$USUSPJobs] eq '-');
+	    undef $USUSPJobs;
+	}
+	if ($SSUSPJobs && (defined $line[$SSUSPJobs])){
+	    $TotalRunningJobs += $line[$SSUSPJobs] unless ($line[$SSUSPJobs] eq '-');
+	    undef $SSUSPJobs;
 	}
 
         if (defined($PrioIndex)) {
@@ -793,9 +824,6 @@ sub QueryQueuesInfos {
 	      (m/^RUNLIMIT$/) && do { $MaxWallTime = $i; };
 	  }
 	    $i=$i+1;
-	}
-	
-	for (@line){
 	    if(m/Open:Active/){
 		$queueenabled{$QueueName}=1;
 		$queuestarted{$QueueName}=1;
@@ -1282,6 +1310,9 @@ sub QueryLSF(){
     # note: the order of these commands is essential!
     PrintDebug("start QueryLRMSVersion\n");
     QueryLRMSVersion();Memory("QueryLRMSVersion");
+    
+    PrintDebug("get LSF parameters");
+    QueryLSFParams();Memory("QueryLSFParams");
 
     PrintDebug("next QueryHostsCPU\n");
     QueryHostsCPU();Memory("QueryHostsCPU");
@@ -1362,12 +1393,17 @@ sub GetDynamicInfoGLUE1 (){
 	# Savannah bug #95182
 	my $maxjobs = (defined $queuetotalslots{$queue})  ?  $queuetotalslots{$queue} : $TotalSlots{$queue};
 	$maxjobs =  $queuemaxjobsperuser{$queue} if (defined $queuemaxjobsperuser{$queue});
+        #PrintDebug("Maxjobs: $maxjobs  $queuetotalslots{$queue} : $TotalSlots{$queue}  $queuemaxjobsperuser{$queue} \n");
 	push @mydynamicinfo, "GlueCEInfoTotalCPUs: "         .$TotalSlots{$queue}."\n"; # Savannah Bug fix #48160 US 31/3/2009
 	push @mydynamicinfo, "GlueCEPolicyAssignedJobSlots: ".$TotalSlots{$queue}."\n";
 	push @mydynamicinfo, "GlueCEPolicyMaxRunningJobs: "  .$maxjobs."\n";
-	push @mydynamicinfo, "GlueCEPolicyMaxSlotsPerJob: "  .$maxjobs."\n";
+	push @mydynamicinfo, "GlueCEPolicyMaxSlotsPerJob: "  .$MaxSlotsPerHost."\n"; # Assume multi threaded use case here so node with most slots
 	push @mydynamicinfo, "GlueCEPolicyMaxCPUTime: "      .$queuemaxcputime{$queue}."\n";
 	push @mydynamicinfo, "GlueCEPolicyMaxWallClockTime: ".$queuemaxwalltime{$queue}."\n";
+	push @mydynamicinfo, "GlueCEPolicyMaxObtainableCPUTime: ".$queuemaxcputime{$queue}."\n"; #95182
+	push @mydynamicinfo, "GlueCEPolicyMaxObtainableWallClockTime: ".$queuemaxwalltime{$queue}."\n"; #95182
+	push @mydynamicinfo, "GlueCEPolicyMaxTotalJobs: ".$MaxNumberOfJobs."\n"; #95182
+	push @mydynamicinfo, "GlueCEPolicyMaxWaitingJobs: ".($MaxNumberOfJobs-$TotalRunningJobs)."\n"; #95182
 	push @mydynamicinfo, "GlueCEPolicyPriority: "        .$queuepriority{$queue}."\n";
 	#push @mydynamicinfo, "GlueCEStateFreeCPUs: "         .$FreeCPU{$queue}."\n";
 	#push @mydynamicinfo, "GlueCEStateFreeJobSlots: "     .$FreeSlots{$queue}."\n";

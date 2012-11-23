@@ -1,22 +1,25 @@
 %define Basename btools
-Summary: replacement command(s) using the lsf SDK with machine readable output 
+Summary: Replacement command(s) using the lsf SDK with machine readable output 
 Name: %{Basename}
 Version: 1.2.8
 Release: 1
 License: ASL 2.0
+URL: https://github.com/schwicke/info.dynamic-scheduler-lsf
+Source: http://cern.ch/uschwick/software/btools-%{version}.tar.gz
 Group: Applications/System
-Source0: %{Basename}.src.tgz
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-buildroot
+Requires: autoconf
+Requires: automake
 
 %description
-contains the btools tool collection to query LSF efficiently from scripts
+Contains the btools tool collection to query LSF efficiently from scripts
 
 %prep
-%setup -c
+%setup -q -c
+./autogen.sh
 
 %build
-./autogen.sh
-./configure --includedir=/usr/local/lsf/include --prefix=${RPM_BUILD_ROOT}/usr
+./configure --includedir=/usr/local/lsf/include --prefix=$RPM_BUILD_ROOT/usr  --mandir=$RPM_BUILD_ROOT/usr/share/man
 make
 
 %install
@@ -34,16 +37,16 @@ make clean
 /usr/bin/bhostsinfo
 
 %doc
-/usr/man/man1/bjobsinfo.1.gz
-/usr/man/man1/bqueuesinfo.1.gz
-/usr/man/man1/bhostsinfo.1.gz
+/usr/share/man/man1/bjobsinfo.1.gz
+/usr/share/man/man1/bqueuesinfo.1.gz
+/usr/share/man/man1/bhostsinfo.1.gz
 
 
 %changelog
-* Fri Nov 23 2012  Ulrich Schwickerath <ulrich.schwickerath at cern.ch> - 1.2.7
+* Fri Nov 23 2012  Ulrich Schwickerath <ulrich.schwickerath at cern.ch> - 1.2.8-1
 - fix for hosts with no job slots in bhostsinfo
 
-* Wed Jun 13 2012  Ulrich Schwickerath <ulrich.schwickerath at cern.ch> - 1.2.7
+* Wed Jun 13 2012  Ulrich Schwickerath <ulrich.schwickerath at cern.ch> - 1.2.7-1
 - only query for a list of submission hosts instead of all hosts in the system now
 
 * Wed Jun 06 2012  Ulrich Schwickerath <ulrich.schwickerath at cern.ch> - 1.2.6-2
