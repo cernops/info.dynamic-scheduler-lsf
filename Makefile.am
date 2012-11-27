@@ -6,6 +6,8 @@ SOURCES=aclocal.m4 btools README AUTHORS configure src doc man autogen.sh Change
 ####################################################################
 # Prepare
 ####################################################################
+all: dist
+
 dist: 
 	@tar  --gzip -cf btools.src.tgz btools/
 	@tar  --gzip -cf ${PACKAGE}-${VERSION}.tar.gz ${SOURCES}
