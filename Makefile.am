@@ -7,23 +7,21 @@ all:	configure
 ####################################################################
 # Prepare
 ####################################################################
-prepare:
-	@mkdir -p build/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
 
-dist: prepare
+dist: 
 	@tar  --gzip -cf btools.src.tgz btools/
-	@tar  --gzip -cf build/${PACKAGE}-${VERSION}.tar.gz ${SOURCES}
+	@tar  --gzip -cf ${PACKAGE}-${VERSION}.tar.gz ${SOURCES}
 
 rpm: dist
-	@rpmbuild --define "_topdir $(CURDIR)/build/" -ta build/${PACKAGE}-${VERSION}.tar.gz
+	@rpmbuild -ta build/${PACKAGE}-${VERSION}.tar.gz
 
 sources: dist
-	@rpmbuild --define "_topdir $(CURDIR)/build/" -ts build/${PACKAGE}-${VERSION}.tar.gz
+	@rpmbuild -ts build/${PACKAGE}-${VERSION}.tar.gz
 
 srpm: sources
 
 clean:
-	rm -f btools.src.tgz
+	rm -f btools.src.tgz ${PACKAGE}-${VERSION}.tar.gz
 	rm -rf build
 
 distclean: clean
