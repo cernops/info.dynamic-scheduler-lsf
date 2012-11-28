@@ -35,6 +35,8 @@ make
 [ $RPM_BUILD_ROOT != / ] && rm -rf $RPM_BUILD_ROOT
 make install 
 rm -rf $RPM_BUILD_ROOT/usr/lib/perl5/vendor_perl/x86_64-linux-thread-multi
+rm -rf $RPM_BUILD_ROOT/usr/lib/perl5/vendor_perl/i386-linux-thread-multi
+
 mkdir -p $RPM_BUILD_ROOT/usr/src/egi
 install -m 644 btools.src.tgz ${RPM_BUILD_ROOT}/usr/src/egi
 
