@@ -15,7 +15,8 @@ BuildRequires: perl
 BuildRequires: perl-TimeDate
 BuildRequires: autoconf
 BuildRequires: automake
-%{?el6:BuildRequires: perl-ExtUtils-MakeMaker}
+{?el6:BuildRequires: perl-Test-Simple}
+{?fedora:BuildRequires: perl-Test-Simple}
 
 %define debug_package %{nil}
 
