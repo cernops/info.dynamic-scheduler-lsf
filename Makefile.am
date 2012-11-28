@@ -13,17 +13,16 @@ dist:
 	@tar  --gzip -cf ${PACKAGE}-${VERSION}.tar.gz ${SOURCES}
 
 rpm: dist
-	@rpmbuild -ta build/${PACKAGE}-${VERSION}.tar.gz
+	@rpmbuild -ta ${PACKAGE}-${VERSION}.tar.gz
 
 sources: dist
 
-srpm: 
-	@rpmbuild -ts build/${PACKAGE}-${VERSION}.tar.gz
+srpm: dist 
+	@rpmbuild -ts ${PACKAGE}-${VERSION}.tar.gz
 
 
 clean:
 	rm -f btools.src.tgz ${PACKAGE}-${VERSION}.tar.gz
-	rm -rf build
 
 distclean: clean
 ####################################################################
