@@ -9,7 +9,10 @@ Source0: http://cern.ch/uschwick/software/info-dynamic-scheduler-lsf-%{version}.
 URL: https://github.com/schwicke/info.dynamic-scheduler-lsf
 BuildArch: noarch
 BuildRoot: %{_tmppath}/%{name}-%{version}-build
+Requires: perl
+Requires: perl-TimeDate
 BuildRequires: perl
+BuildRequires: perl-TimeDate
 BuildRequires: autoconf
 BuildRequires: automake
 %{?el6:BuildRequires: perl-ExtUtils-MakeMaker}
