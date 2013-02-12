@@ -2,7 +2,7 @@ Summary: LSF information provider plugin
 Name: info-dynamic-scheduler-lsf
 Version: 2.2.2
 Vendor: CERN
-Release: 1%{?dist}
+Release: 2%{?dist}
 License: ASL 2.0
 Group: Applications/System
 Source0: http://cern.ch/uschwick/software/info-dynamic-scheduler-lsf-%{version}.tar.gz
@@ -86,6 +86,9 @@ Additional LSF command line tools
 %doc /usr/share/egi/doc/info.dynamic-scheduler-lsf/btools.txt
 
 %changelog
+* Tue Feb 12 2012 Ulrich Schwickerath <ulrich.schwickerath@cern.ch> 2.2.2-2
+- tag a new version necessary to address an issue when packaging the toolsuite for EMI 
+
 * Thu Nov 29 2012 Ulrich Schwickerath <ulrich.schwickerath@cern.ch> 2.2.2-1
 - packaging updates 
 - add koji Makefile
