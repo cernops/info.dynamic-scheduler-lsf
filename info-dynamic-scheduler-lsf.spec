@@ -75,7 +75,7 @@ fi
 %package btools
 Summary: Additional LSF command line tools
 Group: Applications/System
-Autoreq: true
+Requires: autoconf automake gcc rpm-build
 
 %description btools
 Additional LSF command line tools 
@@ -87,6 +87,7 @@ Additional LSF command line tools
 
 %changelog
 * Mon Jun 03 2013 Ulrich Schwickerath <ulrich.schwickerath@cern.ch> 2.2.2-3
+- add requirements for btools package
 - tag new version with update on btools
 
 * Tue Feb 12 2013 Ulrich Schwickerath <ulrich.schwickerath@cern.ch> 2.2.2-2
