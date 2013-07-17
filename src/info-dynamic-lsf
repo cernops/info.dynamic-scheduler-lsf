@@ -1259,6 +1259,10 @@ sub QueryJobsInfos(){
 		PrintDebug(">: $section");
 		chomp $section;
 		
+		if ($section =~ /No\s+such\s+queue/i) {
+		    undef $jobinfo;
+		    last;
+		}
 		if ($section =~ /No\s+[unfinished]*\s*job\s+found/i){
 		    undef $jobinfo;
 		    foreach  $queue (@ExportedLSFGridQueues){
