@@ -70,6 +70,8 @@ my %queuepriority;
 my %queuemaxjobsperuser;
 my %queuemaxcputime;
 my %queuemaxwalltime;
+my %queuemaxphysmem;
+my %queuemaxvirtmem;
 my %queueenabled;
 my %queuestarted;
 # statistics from bjobs 
@@ -86,12 +88,17 @@ my  %nqueueavwalltime;
 # CPU information - queue dependend due to resmyce requests
 my %hosts; # number of CPUs for each host
 my %hoststype;
+my %hostsmaxmem;
+my %hostsmaxvmem;
 my %TotalCPUs;
 my %FreeCPU;
 my %FreeSlots;
 my %TotalSlots;
 my %TryTotalSlots;
 my $MaxSlotsPerHost = 0;
+my %MinPhysMem;
+my %MinVirtMem;
+
 
 # host specific information
 my %reshosts;
@@ -276,26 +283,46 @@ sub ReadInputs {
     # first read the config file, then initialize everything
     IniCommandProxyTools($binPath);
 
-    if ($ARGV[1] && ! $Glue1StaticFileComp) {
-	$Glue1StaticFileComp = $ARGV[1] 
+    if ($ARGV[1] && ! $Glue1StaticFileCE) {
+	$Glue1StaticFileCE = $ARGV[1] 
     }
     #
     # parse the config
     # 
-    if ($Glue1StaticFileComp && ($GlueFormat =~ /glue1/||$GlueFormat =~ /both/)){
-	#Parse  the ldif file.
-	open (LDIF, $Glue1StaticFileComp) || die "Cannot open $Glue1StaticFileComp: $!,";
-	while (<LDIF>) {
-	    if(/dn:\s+GlueCEUniqueID=/){
-		chomp;
-		my $dntext="$_";
-		m/=.*:\d+\/\w+-\w+-([\w\-]+)/;
-		my $queue=$1;
-		push @ExportedLSFGridQueues, $queue;
-		$queuedntext{$queue}=$dntext;
+    if ( -e $Glue1StaticFileCE ){
+	if ($Glue1StaticFileCE && ($GlueFormat =~ /glue1/||$GlueFormat =~ /both/)){
+	    #Parse  the ldif file.
+	    open (LDIF, $Glue1StaticFileCE) || die "Cannot open $Glue1StaticFileCE: $!,";
+	    while (<LDIF>) {
+		if(/dn:\s+GlueCEUniqueID=/){
+		    chomp;
+		    my $dntext="$_";
+		    m/=.*:\d+\/\w+-\w+-([\w\-]+)/;
+		    my $queue=$1;
+		    push @ExportedLSFGridQueues, $queue;
+		    $queuedntext{$queue}=$dntext;
+		}
 	    }
+	    close (LDIF);  
 	}
-	close (LDIF);  
+    } else {
+	if ($Glue1StaticFileComp && ($GlueFormat =~ /glue1/||$GlueFormat =~ /both/)){
+	    #Parse  the ldif file.
+	    open (LDIF, $Glue1StaticFileComp) || die "Cannot open $Glue1StaticFileComp: $!,";
+	    while (<LDIF>) {
+		chomp;
+		# GlueClusterService: ce201:8443/cream-lsf-grid_na48
+		if(/GlueClusterService:\s*([\w\d\.]+):(\d+)\/(\w+-\w+)-([\w\d\-]+)/){
+		    my $endpoint = $1;
+		    my $port = $2;
+		    my $servicedesc = $3;
+		    my $queue = $4;
+		    push @ExportedLSFGridQueues, $queue;
+		    $queuedntext{$queue}="dn: GlueCEUniqueID=${endpoint}:${port}/${servicedesc}-${queue},mds-vo-name=resource,o=grid;"
+		}
+	    }
+	    close (LDIF);  
+	}
     }
     if ($Glue2StaticFileShare  && ($GlueFormat =~ /glue2/||$GlueFormat =~ /both/)){
 	#Parse  the ldif file.
@@ -444,13 +471,19 @@ sub QueryHostsCPU {
     foreach my $line (@{RunCommand("$binPath/lshosts -w")}){
 	next if ($line =~ /^HOST_NAME/);
 	next if ($line =~ /is\s+processing/i || $line =~ /is\s+down/i || $line =~ /not\s+responding/i);
-	my ($fullname,$type,$ncpu) = (split /\s+/,$line)[0,1,4];
+	my ($fullname,$type,$ncpu,$maxmem,$maxswap) = (split /\s+/,$line)[0,1,4,5,6];
 	$hostname = (split /\./, $fullname)[0];
 	next if $hostname =~ /HOST_NAME/;
 	PrintDebug("QueryHostCPU: parsing host \"$line\" with name=\"$fullname\" type=\"$type\" cpus=\"$ncpu\"\n");
 	$ncpu = 0 if ($ncpu !~ /^\d+$/);
 	$hosts{$hostname} = $ncpu;
 	$hoststype{$hostname} = $type;
+	if ($maxmem =~ /(\d+)M/){
+	    $hostsmaxmem{$hostname} = $1;
+	    if ($maxswap  =~ /(\d+)M/){
+		$hostsmaxvmem{$hostname} = $hostsmaxmem{$hostname} + $1;
+	    }
+	}
     }
 }
 
@@ -658,7 +691,7 @@ sub QueryQueuesInfos {
     my $command = "$binPath/bqueues -l ";
     my $QueueName;
     my $i;
-    my ($MaxJobs,$MaxJobsPerUser,$PrioIndex,$QueuedJobs,$RunningJobs,$PSUSPJobs,$USUSPJobs,$SSUSPJobs,$TotalJobs,$MaxCPUTime,$MaxWallTime);
+    my ($MaxJobs,$MaxJobsPerUser,$PrioIndex,$QueuedJobs,$RunningJobs,$PSUSPJobs,$USUSPJobs,$SSUSPJobs,$TotalJobs,$MaxCPUTime,$MaxWallTime,$MemLimit,$SwapLimit);
     my $input;
     foreach $input (@{RunCommand("$command")}){
 	chomp $input;
@@ -683,6 +716,8 @@ sub QueryQueuesInfos {
 	    $nqueueavruntime{$QueueName}  = 0;
 	    $nqueueavpendtime{$QueueName} = 0;
             $queuepriority{$QueueName}    = 0; 
+	    undef $queuemaxphysmem{$QueueName} ;
+	    undef $queuemaxvirtmem{$QueueName} ;
 	    next;
 	}
 	# get the group of hosts that are associated to this queue
@@ -809,6 +844,36 @@ sub QueryQueuesInfos {
 	    undef $MaxWallTime;
 	}
 	
+	if (defined($MemLimit)){
+	    undef @tmp;
+	    my $j=0;
+	    for(@line){
+		if ( m/(\d+)/ ){
+		    my $pml = $1;
+		    $pml /= 1024 if ($line[$j+1] =~ /^k$/i); # convert into MB
+		    push @tmp, $pml;
+		}
+		$j++;
+	    }
+	    $queuemaxphysmem{$QueueName}=$tmp[$MemLimit];
+	    undef $MemLimit;
+	}
+	
+	if (defined($SwapLimit)){
+	    undef @tmp;
+	    my $j=0;
+	    for(@line){
+		if ( m/(\d+)/ ){
+		    my $pml = $1;
+		    $pml /= 1024 if ($line[$j+1] =~ /^k$/i); # convert into MB
+		    push @tmp, $pml;
+		}
+		$j++;
+	    }
+	    $queuemaxvirtmem{$QueueName}=$tmp[$SwapLimit];
+	    undef $SwapLimit;
+	}
+	
 	for (@line){
 	  SWITCH:{ 
 	      (m/^MAX$/)      && do { $MaxJobs     = $i; };
@@ -822,6 +887,8 @@ sub QueryQueuesInfos {
 	      (m/^NJOBS$/)    && do { $TotalJobs   = $i; };
 	      (m/^CPULIMIT$/) && do { $MaxCPUTime  = $i+1; };
 	      (m/^RUNLIMIT$/) && do { $MaxWallTime = $i; };
+	      (m/^MEMLIMIT$/)  && do { $MemLimit = $i; };
+	      (m/^SWAPLIMIT$/) && do { $SwapLimit = $i; };
 	  }
 	    $i=$i+1;
 	    if(m/Open:Active/){
@@ -1051,6 +1118,8 @@ sub QueryQueueJobSlots(){
 	$FreeSlots{$queue}     = 0;
 	$TotalSlots{$queue}    = 0;
 	$TryTotalSlots{$queue} = 0;
+	$MinPhysMem{$queue}    = 99999999;
+	$MinVirtMem{$queue}    = 99999999;
 	$queuequeuedjobs{$queue}  = 0  if (!defined $queuequeuedjobs{$queue});
 	$queuewaitingjobs{$queue} = 0  if (!defined $queuewaitingjobs{$queue});
 	$queuepsuspjobs{$queue}   = 0  if (!defined $queuepsuspjobs{$queue});
@@ -1081,11 +1150,19 @@ sub QueryQueueJobSlots(){
 		} else {
 		    PrintDebug("DEBUG: QueryQueueJobSlots: reshost_free undefined for host $hostname key $res_key");
 		}
-		if(defined $hosts{$hostname}){
+		if (defined $hosts{$hostname}){
 		    $TotalCPUs{$queue}+=$hosts{$hostname};
 		    PrintDebug("DEBUG: QueryQueueJobSlots:TotalCPU $hostname $queue tot:$TotalCPUs{$queue}");
 		}
-		if(defined $reshost_free{$hostname}{$res_key}){
+		if (defined $hostsmaxmem{$hostname}) {
+		    $MinPhysMem{$queue} = $hostsmaxmem{$hostname} if ($MinPhysMem{$queue} > $hostsmaxmem{$hostname});
+		    PrintDebug("DEBUG: QueryQueueJobSlots:maxmem $hostname $queue $MinPhysMem{$queue}");
+		}
+		if (defined $hostsmaxvmem{$hostname}) {
+		    $MinVirtMem{$queue} = $hostsmaxvmem{$hostname} if ($MinVirtMem{$queue} > $hostsmaxvmem{$hostname});
+		    PrintDebug("DEBUG: QueryQueueJobSlots:maxvmem $hostname $queue $MinVirtMem{$queue}");
+		}
+		if (defined $reshost_free{$hostname}{$res_key}){
 		    $FreeCPU{$queue}+=$reshost_free{$hostname}{$res_key};
 		    PrintDebug("DEBUG: QueryQueueJobSlots:FreeCPU $hostname $queue $reshost_free{$hostname}{$res_key} tot:$FreeCPU{$queue}");
 		}
@@ -1368,9 +1445,10 @@ sub GetDynamicInfoGLUE1 (){
 	$Time=$Time/2;
 	$Time=~s/\..*//;
 	my $EstimatedTime = $Time;
-	
+	PrintDebug("DEBUG: QueueDN for $queue is not defined ! Skipping\"") unless $queuedntext{$queue};	
+	next unless defined $queuedntext{$queue};
+	PrintDebug("DEBUG: QueueDN for $queue is \"$queuedntext{$queue}\"");
 	push @mydynamicinfo, "\n$queuedntext{$queue}\n";
-	
 	# batch system version Version
 	
 	push @mydynamicinfo, "GlueCEInfoLRMSVersion: ".$BatchSystemVersion."\n";
@@ -1475,6 +1553,11 @@ sub GetDynamicInfoGLUE2 (){
 	}
 	# CPU and slots
         PrintDebug("creating info for $queue");
+	my $maxmem = $MinPhysMem{$queue};
+	my $maxvmem  = $MinVirtMem{$queue};
+	$maxmem = $queuemaxphysmem{$queue}  if (defined $queuemaxphysmem{$queue});
+	$maxvmem = $queuemaxvirtmem{$queue} if (defined $queuemaxvirtmem{$queue});
+
 	push @mydynamicinfo, "GLUE2EntityCreationTime: $TimeNow\n";
 	push @mydynamicinfo, "GLUE2ComputingShareMaxRunningJobs: "  .$TotalSlots{$queue}."\n";
 	push @mydynamicinfo, "GLUE2ComputingShareDefaultCPUTime: "      .$queuemaxcputime{$queue}."\n";
@@ -1483,6 +1566,10 @@ sub GetDynamicInfoGLUE2 (){
 	# fixme: GlueCEPolicyMaxObtainableCPUTime GlueCEPolicyMaxObtainableWallClockTime should be the hard limit if defined
 	push @mydynamicinfo, "GLUE2ComputingShareMaxCPUTime: "      .$queuemaxcputime{$queue}."\n";
 	push @mydynamicinfo, "GLUE2ComputingShareMaxWallTime: ".$queuemaxwalltime{$queue}."\n";
+	push @mydynamicinfo, "GLUE2ComputingShareMaxMainMemory: ".$maxmem."\n"; # 96529
+	push @mydynamicinfo, "GLUE2ComputingShareMaxVirtualMemory: ".$maxvmem."\n";  # 96529
+	push @mydynamicinfo, "GLUE2ComputingShareMaxSlotsPerJob: ".$MaxSlotsPerHost."\n"; # Assume multi threaded use case here so node with most slots # 96529
+	push @mydynamicinfo, "GLUE2ComputingShareWaitingJobs: ".($MaxNumberOfJobs-$TotalRunningJobs)."\n"; # 96529
     }
     return @mydynamicinfo;
 }

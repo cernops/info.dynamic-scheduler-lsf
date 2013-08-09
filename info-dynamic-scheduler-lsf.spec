@@ -1,6 +1,6 @@
 Summary: LSF information provider plugin
 Name: info-dynamic-scheduler-lsf
-Version: 2.2.3
+Version: 2.3.1
 Vendor: CERN
 Release: 1%{?dist}
 License: ASL 2.0
@@ -86,6 +86,13 @@ Additional LSF command line tools
 %doc /usr/share/egi/doc/info.dynamic-scheduler-lsf/btools.txt
 
 %changelog
+* Fri Aug 09 2013 Ulrich Schwickerath <ulrich.schwickerath@cern.ch> 2.3.1-1
+- fix glue2 publication
+- fix DN reading
+
+* Thu Aug 01 2013 Ulrich Schwickerath <ulrich.schwickerath@cern.ch> 2.3.0-1
+- improve support for emi-cluster
+
 * Wed Jun 17 2013 Ulrich Schwickerath <ulrich.schwickerath@cern.ch> 2.2.3-1
 - add protection against misconfigurations when not using btools [GGUS:#95149]
 
