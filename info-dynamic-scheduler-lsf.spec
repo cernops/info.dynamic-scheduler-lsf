@@ -1,6 +1,6 @@
 Summary: LSF information provider plugin
 Name: info-dynamic-scheduler-lsf
-Version: 2.3.1
+Version: 2.3.2
 Vendor: CERN
 Release: 1%{?dist}
 License: ASL 2.0
@@ -86,9 +86,15 @@ Additional LSF command line tools
 %doc /usr/share/egi/doc/info.dynamic-scheduler-lsf/btools.txt
 
 %changelog
-* Fri Aug 09 2013 Ulrich Schwickerath <ulrich.schwickerath@cern.ch> 2.3.1-1
+* Mon Aug 12 2013 Ulrich Schwickerath <ulrich.schwickerath@cern.ch> 2.3.2-1
+- memory values must be given as integers
+- add GLUE2ComputingShareMaxTotalJobs
+- add GLUE2ComputingShareMaxWaitingJobs
+
+* Fri Aug 09 2013 Ulrich Schwickerath <ulrich.schwickerath@cern.ch> 2.3.1-3
 - fix glue2 publication
 - fix DN reading
+- add sanity checks
 
 * Thu Aug 01 2013 Ulrich Schwickerath <ulrich.schwickerath@cern.ch> 2.3.0-1
 - improve support for emi-cluster

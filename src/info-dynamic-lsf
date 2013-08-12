@@ -289,7 +289,7 @@ sub ReadInputs {
     #
     # parse the config
     # 
-    if ( -e $Glue1StaticFileCE ){
+    if ( defined $Glue1StaticFileCE && -e $Glue1StaticFileCE ){
 	if ($Glue1StaticFileCE && ($GlueFormat =~ /glue1/||$GlueFormat =~ /both/)){
 	    #Parse  the ldif file.
 	    open (LDIF, $Glue1StaticFileCE) || die "Cannot open $Glue1StaticFileCE: $!,";
@@ -325,42 +325,47 @@ sub ReadInputs {
 	}
     }
     if ($Glue2StaticFileShare  && ($GlueFormat =~ /glue2/||$GlueFormat =~ /both/)){
-	#Parse  the ldif file.
-	open (LDIF, $Glue2StaticFileShare) || die "Cannot open $Glue2StaticFileShare: $!,";
-	PrintDebug("DEBUG: Glue2: Reading $Glue2StaticFileShare");
-	while (<LDIF>) {
-	    my $queue;
-	    if(/dn:\s+GLUE2ShareID\s*=\s*/){
-		chomp;
-		my $dntext="$_";
-		while (<LDIF>){
-		    if (m/GLUE2ComputingShareMappingQueue:\s*([\w\d\-\.\_]+)/){
-			my $queue = $1;
-			chomp $queue;
-			if (0 == grep {$_ eq $dntext} @GLUE2LSFShare){
-			    $GLUE2LSFShareMappedQueue{$dntext} = $queue;
-			    push @ExportedLSFGridQueues, $queue if ( 0 == grep {$_ eq $queue} @ExportedLSFGridQueues);
-			    push @GLUE2LSFShare, $dntext 
+	if (-e $Glue2StaticFileShare ) {
+	    #Parse  the ldif file.
+	    open (LDIF, $Glue2StaticFileShare) || die "Cannot open $Glue2StaticFileShare: $!,";
+	    PrintDebug("DEBUG: Glue2: Reading $Glue2StaticFileShare");
+	    while (<LDIF>) {
+		my $queue;
+		if(/dn:\s+GLUE2ShareID\s*=\s*/){
+		    chomp;
+		    my $dntext="$_";
+		    while (<LDIF>){
+			if (m/GLUE2ComputingShareMappingQueue:\s*([\w\d\-\.\_]+)/){
+			    my $queue = $1;
+			    chomp $queue;
+			    if (0 == grep {$_ eq $dntext} @GLUE2LSFShare){
+				$GLUE2LSFShareMappedQueue{$dntext} = $queue;
+				push @ExportedLSFGridQueues, $queue if ( 0 == grep {$_ eq $queue} @ExportedLSFGridQueues);
+				push @GLUE2LSFShare, $dntext 
+			    }
+			    last;
 			}
-			last;
 		    }
 		}
 	    }
+	    close (LDIF);  
 	}
-	close (LDIF);  
     }
+    
     if ($Glue2StaticFileComp  && ($GlueFormat =~ /glue2/||$GlueFormat =~ /both/)){
-	#Parse  the ldif file.
-	open (LDIF, $Glue2StaticFileComp) || die "Cannot open $Glue2StaticFileComp: $!,";
-	PrintDebug("DEBUG: Glue2: Reading $Glue2StaticFileComp");
-	while (<LDIF>) {
-	    if(/dn:\s+GLUE2ManagerId\s*=\s*/){
-		chomp;
-		$compdntext="$_\n";
+	if (-e $Glue2StaticFileComp ) {
+	    #Parse  the ldif file.
+	    open (LDIF, $Glue2StaticFileComp) || die "Cannot open $Glue2StaticFileComp: $!,";
+	    PrintDebug("DEBUG: Glue2: Reading $Glue2StaticFileComp");
+	    while (<LDIF>) {
+		if(/dn:\s+GLUE2ManagerId\s*=\s*/){
+		    chomp;
+		    $compdntext="$_\n";
+		}
 	    }
-	}
-	close (LDIF);
-    }  
+	    close (LDIF);
+	}  
+    }
     if (! -x "$binPath/lsid") {
 	print "Cannot find lsid in directory $binPath\n";
 	Usage();
@@ -1566,10 +1571,13 @@ sub GetDynamicInfoGLUE2 (){
 	# fixme: GlueCEPolicyMaxObtainableCPUTime GlueCEPolicyMaxObtainableWallClockTime should be the hard limit if defined
 	push @mydynamicinfo, "GLUE2ComputingShareMaxCPUTime: "      .$queuemaxcputime{$queue}."\n";
 	push @mydynamicinfo, "GLUE2ComputingShareMaxWallTime: ".$queuemaxwalltime{$queue}."\n";
-	push @mydynamicinfo, "GLUE2ComputingShareMaxMainMemory: ".$maxmem."\n"; # 96529
-	push @mydynamicinfo, "GLUE2ComputingShareMaxVirtualMemory: ".$maxvmem."\n";  # 96529
+	push @mydynamicinfo, "GLUE2ComputingShareMaxMainMemory: ".int($maxmem)."\n"; # 96529
+	push @mydynamicinfo, "GLUE2ComputingShareMaxVirtualMemory: ".int($maxvmem)."\n";  # 96529
 	push @mydynamicinfo, "GLUE2ComputingShareMaxSlotsPerJob: ".$MaxSlotsPerHost."\n"; # Assume multi threaded use case here so node with most slots # 96529
 	push @mydynamicinfo, "GLUE2ComputingShareWaitingJobs: ".($MaxNumberOfJobs-$TotalRunningJobs)."\n"; # 96529
+	push @mydynamicinfo, "GLUE2ComputingShareMaxTotalJobs: ".$MaxNumberOfJobs."\n"; #95182 # 96529
+	push @mydynamicinfo, "GLUE2ComputingShareMaxWaitingJobs: ".($MaxNumberOfJobs-$TotalRunningJobs)."\n"; #95182 
+	
     }
     return @mydynamicinfo;
 }
