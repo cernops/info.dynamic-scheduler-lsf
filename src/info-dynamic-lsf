@@ -318,7 +318,7 @@ sub ReadInputs {
 		    my $servicedesc = $3;
 		    my $queue = $4;
 		    push @ExportedLSFGridQueues, $queue;
-		    $queuedntext{$queue}="dn: GlueCEUniqueID=${endpoint}:${port}/${servicedesc}-${queue},mds-vo-name=resource,o=grid;"
+		    $queuedntext{$queue}="dn: GlueCEUniqueID=${endpoint}:${port}/${servicedesc}-${queue},mds-vo-name=resource,o=grid"
 		}
 	    }
 	    close (LDIF);  
