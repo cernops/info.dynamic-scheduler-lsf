@@ -70,6 +70,8 @@ my %queuepriority;
 my %queuemaxjobsperuser;
 my %queuemaxcputime;
 my %queuemaxwalltime;
+my %queuemincputime;
+my %queueminwalltime;
 my %queuemaxphysmem;
 my %queuemaxvirtmem;
 my %queueenabled;
@@ -696,7 +698,7 @@ sub QueryQueuesInfos {
     my $command = "$binPath/bqueues -l ";
     my $QueueName;
     my $i;
-    my ($MaxJobs,$MaxJobsPerUser,$PrioIndex,$QueuedJobs,$RunningJobs,$PSUSPJobs,$USUSPJobs,$SSUSPJobs,$TotalJobs,$MaxCPUTime,$MaxWallTime,$MemLimit,$SwapLimit);
+    my ($MaxJobs,$MaxJobsPerUser,$PrioIndex,$QueuedJobs,$RunningJobs,$PSUSPJobs,$USUSPJobs,$SSUSPJobs,$TotalJobs,$MaxCPUTime,$MaxWallTime,$MinCPUTime,$MinWalltime,$MemLimit,$SwapLimit);
     my $input;
     foreach $input (@{RunCommand("$command")}){
 	chomp $input;
@@ -715,6 +717,8 @@ sub QueryQueuesInfos {
 	    $queueusedtime{$QueueName}    = 0;
 	    $queuemaxwalltime{$QueueName} = 999999999;
 	    $queuemaxcputime{$QueueName}  = 999999999;
+	    $queueminwalltime{$QueueName} = 0;
+	    $queuemincputime{$QueueName}  = 0;
             $queuerunningjobs{$QueueName} = 0;
             $queuetotaljobs{$QueueName}   = 0;
 	    $nqueueavwalltime{$QueueName} = 0;
@@ -1565,19 +1569,29 @@ sub GetDynamicInfoGLUE2 (){
 
 	push @mydynamicinfo, "GLUE2EntityCreationTime: $TimeNow\n";
 	push @mydynamicinfo, "GLUE2ComputingShareMaxRunningJobs: "  .$TotalSlots{$queue}."\n";
+        push @mydynamicinfo, "GLUE2ComputingShareMaxUserRunningJobs: ".$queuemaxjobsperuser{$queue}."\n";
+
 	push @mydynamicinfo, "GLUE2ComputingShareDefaultCPUTime: "      .$queuemaxcputime{$queue}."\n";
 	push @mydynamicinfo, "GLUE2ComputingShareDefaultWallTime: ".$queuemaxwalltime{$queue}."\n";
 	push @mydynamicinfo, "GLUE2ComputingShareServingState: "           .lc($Status)."\n";
 	# fixme: GlueCEPolicyMaxObtainableCPUTime GlueCEPolicyMaxObtainableWallClockTime should be the hard limit if defined
 	push @mydynamicinfo, "GLUE2ComputingShareMaxCPUTime: "      .$queuemaxcputime{$queue}."\n";
+	push @mydynamicinfo, "GLUE2ComputingShareMinCPUTime: "      .$queuemincputime{$queue}."\n";
+
 	push @mydynamicinfo, "GLUE2ComputingShareMaxWallTime: ".$queuemaxwalltime{$queue}."\n";
+        push @mydynamicinfo, "GLUE2ComputingShareMinWallTime: ".$queueminwalltime{$queue}."\n";
+
 	push @mydynamicinfo, "GLUE2ComputingShareMaxMainMemory: ".int($maxmem)."\n"; # 96529
 	push @mydynamicinfo, "GLUE2ComputingShareMaxVirtualMemory: ".int($maxvmem)."\n";  # 96529
 	push @mydynamicinfo, "GLUE2ComputingShareMaxSlotsPerJob: ".$MaxSlotsPerHost."\n"; # Assume multi threaded use case here so node with most slots # 96529
 	push @mydynamicinfo, "GLUE2ComputingShareWaitingJobs: ".($MaxNumberOfJobs-$TotalRunningJobs)."\n"; # 96529
 	push @mydynamicinfo, "GLUE2ComputingShareMaxTotalJobs: ".$MaxNumberOfJobs."\n"; #95182 # 96529
 	push @mydynamicinfo, "GLUE2ComputingShareMaxWaitingJobs: ".($MaxNumberOfJobs-$TotalRunningJobs)."\n"; #95182 
-	
+       
+	push @mydynamicinfo, "GLUE2ComputingShareMaxTotalCPUTime: " . $queuemaxcputime{$queue} . "\n";
+	push @mydynamicinfo, "GLUE2ComputingShareRequestedSlots: " . $queuetotaljobs{$queue} . "\n"; # only valid if there are no parallel jobs !
+	push @mydynamicinfo, "GLUE2ComputingShareMaxMultiSlotWallTime: " . $queuemaxwalltime{$queue}."\n"; # only valid if there are no parallel jobs !
+
     }
     return @mydynamicinfo;
 }
