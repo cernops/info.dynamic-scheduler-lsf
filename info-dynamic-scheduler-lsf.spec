@@ -1,6 +1,6 @@
 Summary: LSF information provider plugin
 Name: info-dynamic-scheduler-lsf
-Version: 2.3.4
+Version: 2.3.5
 Vendor: CERN
 Release: 1%{?dist}
 License: ASL 2.0
@@ -86,6 +86,9 @@ Additional LSF command line tools
 %doc /usr/share/egi/doc/info.dynamic-scheduler-lsf/btools.txt
 
 %changelog
+* Fri Sep 02 2013 Ulrich Schwickerath <ulrich.schwickerath@cern.ch> 2.3.5-1
+- work around for undefined value in queuemaxjobsperuser
+
 * Fri Aug 30 2013 Ulrich Schwickerath <ulrich.schwickerath@cern.ch> 2.3.4-1
 - fill in more of the still missing Glue2 values with reasonable numbers 
 
