@@ -1,7 +1,7 @@
 package   EGI::CommandProxyTools;
 require   Exporter;
 @ISA    = qw(Exporter);
-@EXPORT = qw(IniCommandProxyTools CommandProxy ReadInfoDynamicLsfConf WriteFileLock ReadFileLock RunCommand QueryCeType PrintDebug $CEProductionState $CEDefaultState $schedCycle @volist %VO2LSF %LSF2VO %VO2QUEUE %QUEUE2VO $LRMSInfoFile @LastCommandOutput @LsfLocalQueues $CELSFType $CacheID $GlueFormat $ReportWhichGroup $CPUScalingReferenceSI00 $glExec $Glue1StaticFileComp $Glue2StaticFileComp $Glue2StaticFileShare $binPath $MapFile $Debug DEBUG);
+@EXPORT = qw(IniCommandProxyTools CommandProxy ReadInfoDynamicLsfConf WriteFileLock ReadFileLock RunCommand QueryCeType PrintDebug $CEProductionState $CEDefaultState $schedCycle @volist %VO2LSF %LSF2VO %VO2QUEUE %QUEUE2VO $LRMSInfoFile @LastCommandOutput @LsfLocalQueues $CELSFType $CacheID $GlueFormat $ReportWhichGroup $CPUScalingReferenceSI00 $glExec $Glue1StaticFileComp $Glue1StaticFileCE $Glue2StaticFileComp $Glue2StaticFileShare $binPath $MapFile $Debug DEBUG);
 
 $VERSION = '2.2.1-1';
 $ABSTRACT = "perl module to enable caching";
@@ -54,6 +54,7 @@ our $CacheID;
 our $GlueFormat;
 
 # Static input files
+our $Glue1StaticFileCE;
 our $Glue1StaticFileComp;
 our $Glue2StaticFileComp;
 our $Glue2StaticFileShare;
@@ -258,7 +259,8 @@ sub ReadInfoDynamicLsfConf()
 		@LsfLocalQueues=split /\s+/, $1 if /^LSF_LOCAL_QUEUES\s*\=\s*\"(.+?)\"*/;
 		$CPUScalingReferenceSI00 = $1 if (/^CPUScalingReferenceSI00\s*=\s*(\d[\d\.]+)/);
 		$glExec = lc($1)  if (/^glExec\s*=\s*([yYtToO]\w*)/);
-		$Glue1StaticFileComp =  $1  if (/^glue1-static-file-CE\s*=\s*\"*([\w\d\_\+\-\/\.]+)\"*/);
+		$Glue1StaticFileCE   =  $1  if (/^glue1-static-file-ce\s*=\s*\"*([\w\d\_\+\-\/\.]+)\"*/);
+		$Glue1StaticFileComp =  $1  if (/^glue1-static-file-cluster\s*=\s*\"*([\w\d\_\+\-\/\.]+)\"*/);
 		$Glue2StaticFileComp =  $1  if (/^glue2-static-file-computing-manager\s*=\s*\"*([\w\d\_\+\-\/\.]+)\"*/);
 		$Glue2StaticFileShare = $1  if (/^glue2-static-file-computing-share\s*=\s*\"*([\w\d\_\+\-\/\.]+)\"*/);
 		$Glue2StaticFileShare = $1  if (/^glue2-static-file-computing-share\s*=\s*\"*([\w\d\_\+\-\/\.]+)\"*/);

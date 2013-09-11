@@ -20,6 +20,11 @@ sources: dist
 srpm: dist 
 	@rpmbuild -ts ${PACKAGE}-${VERSION}.tar.gz
 
+ai5: dist 
+	@rpmbuild -ts --define 'dist .ai5' ${PACKAGE}-${VERSION}.tar.gz
+
+ai6: dist 
+	@rpmbuild -ts --define 'dist .ai6' ${PACKAGE}-${VERSION}.tar.gz
 
 clean:
 	rm -f btools.src.tgz ${PACKAGE}-${VERSION}.tar.gz

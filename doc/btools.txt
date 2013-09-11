@@ -28,13 +28,13 @@ In addition, you will need to have LSF installed, including libraries and header
 Installing and unpacking the sources:
 -------------------------------------
 As root, first install the rpm containing the sources:
-# rpm -i glite-info-dynamic-scheduler-lsf-btools-2.0.21-1.noarch.rpm
+# yum install glite-info-dynamic-scheduler-lsf-btools
 
 Building the tools:
 -------------------
 Build the tools as normal user:
 
-tar -zxf  glite-info-dynamic-scheduler-lsf-btools-2.0.21-1.noarch.rpm
+tar -zxf  /usr/src/egi/btools.src.tgz
 $ cd btools
 $ ./autogen.sh
 $ ./configure --prefix=/usr

@@ -1,6 +1,6 @@
 Summary: LSF information provider plugin
 Name: info-dynamic-scheduler-lsf
-Version: 2.2.2
+Version: 2.3.5
 Vendor: CERN
 Release: 1%{?dist}
 License: ASL 2.0
@@ -75,7 +75,7 @@ fi
 %package btools
 Summary: Additional LSF command line tools
 Group: Applications/System
-Autoreq: true
+Requires: autoconf automake gcc rpm-build
 
 %description btools
 Additional LSF command line tools 
@@ -86,6 +86,41 @@ Additional LSF command line tools
 %doc /usr/share/egi/doc/info.dynamic-scheduler-lsf/btools.txt
 
 %changelog
+* Fri Sep 02 2013 Ulrich Schwickerath <ulrich.schwickerath@cern.ch> 2.3.5-1
+- work around for undefined value in queuemaxjobsperuser
+
+* Fri Aug 30 2013 Ulrich Schwickerath <ulrich.schwickerath@cern.ch> 2.3.4-1
+- fill in more of the still missing Glue2 values with reasonable numbers 
+
+* Wed Aug 21 2013 Ulrich Schwickerath <ulrich.schwickerath@cern.ch> 2.3.3-1
+- remove semicolon for o=grid DN 
+
+* Tue Aug 13 2013 Ulrich Schwickerath <ulrich.schwickerath@cern.ch> 2.3.2-2
+- add ai5 and ai6 tags for easy CERN builds
+
+* Mon Aug 12 2013 Ulrich Schwickerath <ulrich.schwickerath@cern.ch> 2.3.2-1
+- memory values must be given as integers
+- add GLUE2ComputingShareMaxTotalJobs
+- add GLUE2ComputingShareMaxWaitingJobs
+
+* Fri Aug 09 2013 Ulrich Schwickerath <ulrich.schwickerath@cern.ch> 2.3.1-3
+- fix glue2 publication
+- fix DN reading
+- add sanity checks
+
+* Thu Aug 01 2013 Ulrich Schwickerath <ulrich.schwickerath@cern.ch> 2.3.0-1
+- improve support for emi-cluster
+
+* Wed Jun 17 2013 Ulrich Schwickerath <ulrich.schwickerath@cern.ch> 2.2.3-1
+- add protection against misconfigurations when not using btools [GGUS:#95149]
+
+* Mon Jun 03 2013 Ulrich Schwickerath <ulrich.schwickerath@cern.ch> 2.2.2-3
+- add requirements for btools package
+- tag new version with update on btools
+
+* Tue Feb 12 2013 Ulrich Schwickerath <ulrich.schwickerath@cern.ch> 2.2.2-2
+- tag a new version necessary to address an issue when packaging the toolsuite for EMI 
+
 * Thu Nov 29 2012 Ulrich Schwickerath <ulrich.schwickerath@cern.ch> 2.2.2-1
 - packaging updates 
 - add koji Makefile
