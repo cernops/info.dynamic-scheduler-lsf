@@ -2,14 +2,13 @@
 Summary: Replacement command(s) using the lsf SDK with machine readable output 
 Name: %{Basename}
 Version: 1.2.8
-Release: 1
+Release: 2
 License: ASL 2.0
 URL: https://github.com/schwicke/info.dynamic-scheduler-lsf
 Source: http://cern.ch/uschwick/software/btools-%{version}.tar.gz
 Group: Applications/System
 BuildRoot: %{_tmppath}/%{name}-%{version}-%{release}-buildroot
-Requires: autoconf
-Requires: automake
+Requires: autoconf automake gcc rpm-build
 
 %description
 Contains the btools tool collection to query LSF efficiently from scripts
@@ -43,7 +42,10 @@ make clean
 
 
 %changelog
-* Fri Nov 23 2012  Ulrich Schwickerath <ulrich.schwickerath at cern.ch> - 1.2.8-1
+* Mon Jun 03 2013 Ulrich Schwickerath <ulrich.schwickerath at cern.ch> - 1.2.8-2
+- review build on sl6
+
+* Fri Nov 23 2012 Ulrich Schwickerath <ulrich.schwickerath at cern.ch> - 1.2.8-1
 - fix for hosts with no job slots in bhostsinfo
 
 * Wed Jun 13 2012  Ulrich Schwickerath <ulrich.schwickerath at cern.ch> - 1.2.7-1
