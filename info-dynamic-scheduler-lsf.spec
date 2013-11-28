@@ -48,8 +48,9 @@ mkdir -p $RPM_BUILD_ROOT/var/cache/info-dynamic-lsf
 if [ ! -d /var/cache/info-dynamic-lsf ]; then
    /bin/mkdir -p /var/cache/info-dynamic-lsf
 fi
-/bin/chmod 1777 /var/cache/info-dynamic-lsf
-
+/bin/chown tomcat.ldap  /var/cache/info-dynamic-lsf
+/bin/chmod 770 /var/cache/info-dynamic-lsf
+/bin/chmod g+s /var/cache/info-dynamic-lsf
 
 %files
 %defattr(-,root,root)
@@ -86,6 +87,9 @@ Additional LSF command line tools
 %doc /usr/share/egi/doc/info.dynamic-scheduler-lsf/btools.txt
 
 %changelog
+* Thu Nov 28 2013 Ulrich Schwickerath <ulrich.schwickerath@cern.ch> 2.3.5-2
+- change permissions for cache directory
+
 * Fri Sep 02 2013 Ulrich Schwickerath <ulrich.schwickerath@cern.ch> 2.3.5-1
 - work around for undefined value in queuemaxjobsperuser
 
