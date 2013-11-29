@@ -1,6 +1,6 @@
 Summary: LSF information provider plugin
 Name: info-dynamic-scheduler-lsf
-Version: 2.3.5
+Version: 2.3.6
 Vendor: CERN
 Release: 1%{?dist}
 License: ASL 2.0
@@ -11,6 +11,11 @@ BuildArch: noarch
 BuildRoot: %{_tmppath}/%{name}-%{version}-build
 Requires: perl
 Requires: perl-TimeDate
+Requires: openldap-servers
+%{?el5:Requires: tomcat5}
+%{?el6:Requires: tomcat6}
+%{?fedora:Requires: tomcat6}
+
 BuildRequires: perl
 BuildRequires: perl-TimeDate
 BuildRequires: autoconf
@@ -87,6 +92,9 @@ Additional LSF command line tools
 %doc /usr/share/egi/doc/info.dynamic-scheduler-lsf/btools.txt
 
 %changelog
+* Fri Nov 29 2013 Ulrich Schwickerath <ulrich.schwickerath@cern.ch> 2.3.6-1
+- add requirements to ensure the existance of ldap and tomcat users
+
 * Thu Nov 28 2013 Ulrich Schwickerath <ulrich.schwickerath@cern.ch> 2.3.5-2
 - change permissions for cache directory
 
