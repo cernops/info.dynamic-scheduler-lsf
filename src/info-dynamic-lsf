@@ -1031,12 +1031,12 @@ sub AnaJobInfo($$$){
 	# done jobs are not counted here
 	if ($status eq "PEND"||$status eq "WAIT"||$status eq "PSUSP"||$status eq "SSUSP"||$status eq "USUSP"||$status eq "RUN"||$status eq "UNKWN"){
 	    $queuetotaljobs{$queue}   ++;
-	    $queuequeuedjobs{$queue}  ++ if ($status eq "PEND");
+	    $queuequeuedjobs{$queue}  ++ if ($status eq "PEND"||$status eq "PSUSP");
 	    $queuewaitingjobs{$queue} ++ if ($status eq "WAIT");
 	    $queuepsuspjobs{$queue}   ++ if ($status eq "PSUSP");
 	    $queuessuspjobs{$queue}   ++ if ($status eq "SSUSP");
 	    $queueususpjobs{$queue}   ++ if ($status eq "USUSP");
-	    $queuerunningjobs{$queue} ++ if ($status eq "RUN"||$status eq "UNKWN");
+	    $queuerunningjobs{$queue} ++ if ($status eq "RUN"||$status eq "UNKWN"||$status eq "PSUSP"||$status eq "USUSP");
 	} else {
 	    return;
 	}
@@ -1584,12 +1584,14 @@ sub GetDynamicInfoGLUE2 (){
 	push @mydynamicinfo, "GLUE2ComputingShareMaxMainMemory: ".int($maxmem)."\n"; # 96529
 	push @mydynamicinfo, "GLUE2ComputingShareMaxVirtualMemory: ".int($maxvmem)."\n";  # 96529
 	push @mydynamicinfo, "GLUE2ComputingShareMaxSlotsPerJob: ".$MaxSlotsPerHost."\n"; # Assume multi threaded use case here so node with most slots # 96529
-	push @mydynamicinfo, "GLUE2ComputingShareWaitingJobs: ".($MaxNumberOfJobs-$TotalRunningJobs)."\n"; # 96529
 	push @mydynamicinfo, "GLUE2ComputingShareMaxTotalJobs: ".$MaxNumberOfJobs."\n"; #95182 # 96529
 	push @mydynamicinfo, "GLUE2ComputingShareMaxWaitingJobs: ".($MaxNumberOfJobs-$TotalRunningJobs)."\n"; #95182 
 	push @mydynamicinfo, "GLUE2ComputingShareMaxTotalCPUTime: " . $queuemaxcputime{$queue} . "\n";
 	push @mydynamicinfo, "GLUE2ComputingShareRequestedSlots: " . $queuetotaljobs{$queue} . "\n"; # only valid if there are no parallel jobs !
 	push @mydynamicinfo, "GLUE2ComputingShareMaxMultiSlotWallTime: " . $queuemaxwalltime{$queue}."\n"; # only valid if there are no parallel jobs !
+	push @mydynamicinfo, "GLUE2ComputingShareWaitingJobs: ".($queuequeuedjobs{$queue})."\n"; #103236
+	push @mydynamicinfo, "GLUE2ComputingShareRunningJobs: ".($queuerunningjobs{$queue})."\n"; #103236
+	push @mydynamicinfo, "GLUE2ComputingShareTotalJobs: ".($queuetotaljobs{$queue})."\n"; #103236
 
     }
     return @mydynamicinfo;
